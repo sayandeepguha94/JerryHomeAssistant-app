@@ -1,39 +1,45 @@
-# Walkthrough: Reliability Pass (Line by Line Fix)
+# Walkthrough: Dual-Server Reliability & IoT Configuration
 
-I have applied a set of deep-level fixes to resolve the persistent "black screen" and added diagnostic tools to help us pinpoint the issue.
+I have refined the communication logic to support your dual-server setup, where the **Python Backend** handles hardware triggers and the **Node Server** handles user management and household runs.
 
 ## Changes Made
 
-### 1. Robust Static File Serving
-- **Absolute Resolution**: Updated the Node server to use `path.resolve(__dirname)` for static file serving. This ensures that the server correctly identifies the frontend assets (JS/CSS) even when running in different Docker execution contexts.
-- **Improved SPA Routing**: Added a manual fallback for `index.html` that only triggers if the file actually exists on disk, preventing "masking" of real 404 errors.
+### 1. Dedicated IoT Hub Configuration
+- **New Field**: Added **\"IoT Hub (Python Backend)\"** to the Settings page. This allows you to explicitly define where your hardware controller is located (e.g., `http://192.168.29.112:8000`).
+- **Persistence**: This address is now saved on the Node server in `hub_config.json` and survives restarts.
+- **Dynamic Bridge**: The Node server now uses this saved address for all background synchronization and device triggering.
 
-### 2. IP-Agnostic Dashboard Logic
-- **Simplified Networking**: Refactored `api.js` to strictly favor relative paths (`/api`) by default. This makes the dashboard "IP-agnostic"—it will work perfectly whether you access it via `localhost`, `0.0.0.0`, or a LAN IP.
-- **Smart URL Detection**: Added logic to automatically ignore broken or invalid URLs (like `0.0.0.0`) in the browser's local storage.
+### 2. Reliable Dashboard Sync (Relative Paths)
+- **Problem**: Manually entering full IPs (like `192.168...`) in the browser settings often causes caching and cross-origin issues, leading to the \"flip-flop\" behavior you saw.
+- **Solution**: Refactored the dashboard to use **relative paths** (`/api`) by default.
+- **Auto-Detect**: You can now leave the \"Dashboard Server\" field **EMPTY**. The app will automatically talk to the correct server IP that served the page.
 
-### 3. Real-time Diagnostics
-- **Server Health Check**: Added a `/api/health` endpoint. You can now visit `http://localhost:3000/api/health` to verify the container is alive.
-- **API Logger**: The Node server now logs every incoming request to the terminal:
+### 3. High-Visibility Terminal Logging
+- **Request Logger**: Added a middleware to the Node server that logs every incoming API request:
   - `[API] GET /api/devices - 200 (5ms)`
-- **Client-side Logging**: Added `console.log` markers to the React mount process (`index.js`) and `AppShell` so we can see exactly where the app is hanging in your browser's dev tools.
+- **Bridge Logger**: Added explicit logs for outgoing hardware triggers:
+  - `[Bridge] Forwarding -> http://192.168.29.112:8000/...`
+  - This allows you to verify in real-time that the Node server is successfully hitting the Python backend.
 
-## How to Verify and Debug
+### 4. Robust Docker Networking
+- **Host Gateway**: Updated `docker-compose.yml` to allow the Node container to reliably resolve local host machine addresses.
 
-1.  **Restart with a Clean Build**:
+## How to Verify
+
+1.  **Rebuild and Start**:
     ```bash
-    sudo docker compose down --remove-orphans
     sudo docker compose up -d --build
     ```
-2.  **Verify Server Health**:
-    Visit `http://localhost:3000/api/health`.
-    - **If it says "OK"**: The server is fine.
-    - **If it times out**: The container networking is blocked.
-
-3.  **Inspect the Black Screen**:
-    If the screen is still black, open the **Browser Console** (Right-click > Inspect > Console):
-    - **Look for "React mounting..."**: If you see this, the JS bundle loaded correctly.
-    - **Look for "AppShell render"**: This tells us if the authentication layer is hanging.
+2.  **Access the Dashboard**: Use your LAN IP: `http://192.168.29.179:3000`.
+3.  **Configure Hub**:
+    - Go to **Settings**.
+    - In the **\"IoT Hub (Python Backend)\"** field, enter: `http://192.168.29.112:8000`.
+    - Clear the **\"Dashboard Server (Node)\"** field (leave it empty).
+    - Click **Save**.
+4.  **Test Connectivity**:
+    - **Trigger**: Toggle a device and verify the physical hardware responds.
+    - **Sync**: Add a shopping list item and verify it persists after a refresh.
+    - **Terminal**: Run `sudo docker compose logs -f jerry-home-assistant` to see the internal communication logs.
 
 > [!TIP]
-> If you encounter an error message on the screen, please copy the technical details shown; they will help me identify any remaining issues instantly.
+> By keeping the \"Dashboard Server\" field empty, you ensure the browser never has to deal with cross-origin IP mismatches.

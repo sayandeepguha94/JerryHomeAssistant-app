@@ -11,6 +11,7 @@ export default function Settings() {
   const nav = useNavigate();
   const [serverUrl, setUrl] = useState(getServerUrl());
   const [fallbackUrl, setFallback] = useState(getFallbackUrl());
+  const [hubUrl, setHubUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null);
   const [fallbackStatus, setFallbackStatus] = useState(null);
@@ -18,6 +19,12 @@ export default function Settings() {
 
   useEffect(() => {
     (async () => {
+      // Load hub config from Node server
+      try {
+        const res = await api.get("/hub-config");
+        if (res.data.url) setHubUrl(res.data.url);
+      } catch (e) { console.error("Hub config load failed", e); }
+
       const [s, fs] = await Promise.all([
         pingServer(),
         getFallbackUrl() ? pingServer(getFallbackUrl()) : Promise.resolve(null)
@@ -30,12 +37,25 @@ export default function Settings() {
   const save = async () => {
     let v = serverUrl.trim();
     let f = fallbackUrl.trim();
-    if (!v) { toast.error("Primary server address is required"); return; }
-    if (!v.startsWith("http://") && !v.startsWith("https://")) v = `http://${v}`;
+    let h = hubUrl.trim();
+
+    if (!v && !localStorage.getItem("jerry_server_url")) {
+      // Allow empty if we want to use current host, but warn if nothing at all
+    }
+
+    if (v && !v.startsWith("http://") && !v.startsWith("https://")) v = `http://${v}`;
     if (f && !f.startsWith("http://") && !f.startsWith("https://")) f = `http://${f}`;
+    if (h && !h.startsWith("http://") && !h.startsWith("https://")) h = `http://${h}`;
 
     setSaving(true);
     try {
+      // 1. Save Hub Config to Node
+      if (h) {
+        await api.post("/hub-config", { url: h });
+        toast.success("IoT Hub address updated on server");
+      }
+
+      // 2. Save Node Server (Frontend Server)
       setServerUrl(v);
       setUrl(v);
       setFallbackUrl(f);
@@ -50,12 +70,10 @@ export default function Settings() {
       setFallbackStatus(fs);
 
       if (s.online) {
-        toast.success("Primary server saved & reachable");
-      } else if (f && fs?.online) {
-        toast.warning("Primary unreachable, but Fallback is Online");
-      } else {
-        toast.error("Both servers appear to be unreachable");
+        toast.success("Dashboard settings saved");
       }
+    } catch (e) {
+      toast.error("Failed to save some settings");
     } finally {
       setSaving(false);
     }
@@ -111,8 +129,23 @@ export default function Settings() {
 
       <div className="glass rounded-3xl p-5 mb-5" data-testid="settings-server-card">
         <div className="flex items-center gap-2 mb-3">
+          <Server className="w-4 h-4 text-[#B4F733]" />
+          <h3 className="font-heading text-lg font-semibold text-[#B4F733]">IoT Hub (Python Backend)</h3>
+        </div>
+        <p className="text-xs text-white/50 mb-3">
+          The address of your Python hardware controller (triggers devices).
+        </p>
+        <input
+          value={hubUrl}
+          onChange={(e) => setHubUrl(e.target.value)}
+          placeholder="http://192.168.29.112:8000"
+          disabled={!isAdmin}
+          className="w-full bg-transparent border-b border-white/20 focus:border-[#B4F733] outline-none py-2 text-base font-heading mb-8"
+        />
+
+        <div className="flex items-center gap-2 mb-3">
           <Server className="w-4 h-4 text-[#E05D26]" />
-          <h3 className="font-heading text-lg font-semibold">Node Server</h3>
+          <h3 className="font-heading text-lg font-semibold">Dashboard Server (Node)</h3>
           {status && (
             <span className={`ml-auto flex items-center gap-1 text-xs px-2 py-1 rounded-full ${status.online ? "text-[#B4F733]" : "text-red-400"}`} data-testid="settings-status-badge">
               {status.online ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
@@ -121,13 +154,13 @@ export default function Settings() {
           )}
         </div>
         <p className="text-xs text-white/50 mb-3">
-          The local IP & port where your voice-assistant Node.js server is running. This is stored on this device only.
+          The address of this frontend server (syncs runs/users). Leave <strong>EMPTY</strong> to auto-detect.
         </p>
         <input
           data-testid="settings-server-url-input"
           value={serverUrl}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="http://192.168.29.112:3000"
+          placeholder={window.location.origin}
           disabled={!isAdmin}
           className="w-full bg-transparent border-b border-white/20 focus:border-[#E05D26] outline-none py-2 text-base font-heading mb-6"
         />

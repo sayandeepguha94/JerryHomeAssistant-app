@@ -1,8 +1,10 @@
-# Tasks: Reliability Pass
+# Tasks: Reliable Dual-Server Communication
 
-- [x] Add Request Logger middleware to `server.ts`
-- [x] Add `/api/health` endpoint to `server.ts`
-- [x] Implement robust static file serving with `path.resolve` in `server.ts`
-- [x] Refactor `api.js` for IP-agnostic defaults and relative paths
-- [x] Add mount and render logging to `index.js` and `App.js`
-- [x] Verify build and recovery from black screen
+- [ ] Implement `hub_config.json` persistence in `server.ts`
+- [ ] Add `GET/POST /api/hub-config` to `server.ts`
+- [ ] Update `forwardToIoTHub` to use dynamic URL from config
+- [ ] Add API Request Logger to `server.ts`
+- [ ] Update `Settings.jsx` with "IoT Hub (Python Backend)" field
+- [ ] Refactor `api.js` for strict relative pathing
+- [ ] Update `docker-compose.yml` with `host-gateway`
+- [ ] Verify triggers and sync simultaneously

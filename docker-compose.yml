@@ -6,6 +6,8 @@ services:
       context: .
       dockerfile: _original_node_ref/Dockerfile
     container_name: jerry-home-assistant
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - PORT=3000
       - NODE_ENV=production

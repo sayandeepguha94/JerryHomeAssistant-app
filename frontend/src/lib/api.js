@@ -53,17 +53,22 @@ export const clearServerUrl = () => {
 };
 
 export const api = axios.create({
-  baseURL: "/api", // Default to relative path
+  baseURL: "/api",
   timeout: 30000,
 });
 
 api.interceptors.request.use((config) => {
-  const currentUrl = getServerUrl();
+  const savedUrl = localStorage.getItem(URL_KEY);
   const currentOrigin = typeof window !== "undefined" ? window.location.origin : "";
 
-  // If the target server is NOT the same as the page host, use absolute URL
-  if (currentUrl && currentUrl !== currentOrigin) {
-    config.baseURL = `${currentUrl.replace(/\/+$/, "")}/api`;
+  // If a custom Node Server is set AND it's different from current host, use it.
+  if (savedUrl) {
+    const normalizedSaved = savedUrl.trim().replace(/\/+$/, "");
+    if (normalizedSaved && !normalizedSaved.includes(window.location.host)) {
+      config.baseURL = `${normalizedSaved}/api`;
+    } else {
+      config.baseURL = "/api";
+    }
   } else {
     config.baseURL = "/api";
   }

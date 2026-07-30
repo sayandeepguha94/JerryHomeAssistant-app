@@ -43,6 +43,20 @@ app.get("/api/health", (req, res) => {
 });
 
 const STATE_FILE = path.join(process.cwd(), "device_state.json");
+const HUB_CONFIG_FILE = path.join(process.cwd(), "hub_config.json");
+
+// IoT Hub Dynamic Configuration
+let IOT_HUB_URL = "http://192.168.29.112:8000/";
+
+// Helper to save hub config
+function saveHubConfig() {
+  try {
+    fs.writeFileSync(HUB_CONFIG_FILE, JSON.stringify({ url: IOT_HUB_URL }, null, 2));
+    console.log(`[Config] Saved Hub URL: ${IOT_HUB_URL}`);
+  } catch (err) {
+    console.error("[Config] Failed to save hub config:", err);
+  }
+}
 
 // Helper to save device state to disk
 function saveState() {
@@ -53,8 +67,8 @@ function saveState() {
   }
 }
 
-// Helper to load device state from disk
-function loadState() {
+// Helper to load all state from disk
+function loadAllState() {
   try {
     if (fs.existsSync(STATE_FILE)) {
       const data = fs.readFileSync(STATE_FILE, "utf8");
@@ -62,6 +76,14 @@ function loadState() {
       if (Array.isArray(loaded)) {
         devices = loaded;
         console.log(`[State] Loaded ${devices.length} devices from disk.`);
+      }
+    }
+    if (fs.existsSync(HUB_CONFIG_FILE)) {
+      const data = fs.readFileSync(HUB_CONFIG_FILE, "utf8");
+      const config = JSON.parse(data);
+      if (config.url) {
+        IOT_HUB_URL = config.url.endsWith("/") ? config.url : `${config.url}/`;
+        console.log(`[Config] Loaded Hub URL from disk: ${IOT_HUB_URL}`);
       }
     }
   } catch (err) {
@@ -86,6 +108,24 @@ app.post("/api/login", (req, res) => {
     });
   }
   return res.status(401).json({ error: "Invalid credentials" });
+});
+
+// Hub Config Endpoints
+app.get("/api/hub-config", (req, res) => {
+  res.json({ url: IOT_HUB_URL });
+});
+
+app.post("/api/hub-config", (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: "URL is required" });
+
+  IOT_HUB_URL = url.endsWith("/") ? url : `${url}/`;
+  saveHubConfig();
+
+  // Trigger immediate sync
+  syncDevicesWithHardware();
+
+  res.json({ success: true, url: IOT_HUB_URL });
 });
 
 // Centralized Ecosystem Devices State
@@ -147,13 +187,10 @@ let shoppingList: ShoppingItem[] = [
   { id: "5", text: "Dark Roast Coffee Beans", completed: true, createdAt: Date.now() - 3600000 * 1 },
 ];
 
-// IoT Bridge Configuration
-const IOT_HUB_URL = process.env.IOT_HUB_URL || "http://192.168.29.112:8000/";
-
-// Helper to forward commands to the actual IoT Hub (192.168.29.112)
+// Helper to forward commands to the actual IoT Hub
 async function forwardToIoTHub(payload: any) {
   try {
-    console.log(`[Bridge] Forwarding to IoT Hub (${IOT_HUB_URL}):`, JSON.stringify(payload));
+    console.log(`[Bridge] Forwarding -> ${IOT_HUB_URL}:`, JSON.stringify(payload));
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
 
@@ -171,17 +208,17 @@ async function forwardToIoTHub(payload: any) {
 
     if (response.ok) {
       const data = await response.json();
-      console.log(`[Bridge] Success from IoT Hub:`, data);
+      console.log(`[Bridge] Success from Hub`);
       return data;
     } else {
-      console.error(`[Bridge] IoT Hub error: ${response.status} ${response.statusText}`);
+      console.error(`[Bridge] Hub error: ${response.status} ${response.statusText}`);
       return null;
     }
   } catch (err: any) {
     if (err.name === 'AbortError') {
-      console.error(`[Bridge] IoT Hub request timed out`);
+      console.error(`[Bridge] Hub request timed out`);
     } else {
-      console.error(`[Bridge] Failed to connect to IoT Hub:`, err.message);
+      console.error(`[Bridge] Connection failed:`, err.message);
     }
     return null;
   }
@@ -800,7 +837,7 @@ app.post("/api/proxy", async (req, res) => {
 
 // Setup Vite or static serving
 async function startServer() {
-  loadState();
+  loadAllState();
 
   // Start background sync with physical hardware
   syncDevicesWithHardware();
