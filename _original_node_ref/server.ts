@@ -10,7 +10,17 @@ dotenv.config();
 
 const app = express();
 
-// 1. GLOBAL CORS - MUST BE FIRST
+// 1. Request Logger Middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`\x1b[36m[API]\x1b[0m ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
+  });
+  next();
+});
+
+// 2. GLOBAL CORS
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
@@ -26,6 +36,12 @@ app.use((req, res, next) => {
 app.use(express.json());
 
 const PORT = 3000;
+
+// Health check
+app.get("/api/health", (req, res) => {
+  res.send("OK");
+});
+
 const STATE_FILE = path.join(process.cwd(), "device_state.json");
 
 // Helper to save device state to disk
@@ -803,10 +819,18 @@ async function startServer() {
     // In production, the compiled server.cjs is located inside the 'dist' folder
     // along with the built frontend files.
     const distPath = __dirname;
-    console.log(`[Server] Serving static files from: ${distPath}`);
-    app.use(express.static(distPath));
+    console.log(`[Server] Serving static    const distPath = path.resolve(__dirname);
+    console.log(`\x1b[34m[Server]\x1b[0m Production mode: serving from ${distPath}`);
+
+    app.use(express.static(distPath, { index: false }));
+
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      const indexPath = path.join(distPath, "index.html");
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send("Frontend assets not found in " + distPath);
+      }
     });
   }
 

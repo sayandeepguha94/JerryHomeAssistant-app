@@ -1,39 +1,39 @@
-# Walkthrough: Centralized IoT Bridge & Status Sync
+# Walkthrough: Reliability Pass (Line by Line Fix)
 
-I have transformed the Node server into the primary manager for your IoT ecosystem. It now handles all communication with your hardware and ensures the dashboard stays accurate through refreshes.
+I have applied a set of deep-level fixes to resolve the persistent "black screen" and added diagnostic tools to help us pinpoint the issue.
 
 ## Changes Made
 
-### 1. Hardware State Synchronization
-- **Background Polling**: The Node server now calls `GET http://192.168.29.112:8000/` every 5 seconds.
-- **Auto-Update**: If you manually toggle a physical switch, the server detects the change and updates its internal state. This ensures that when you refresh the dashboard, you see the *actual* status of your home.
+### 1. Robust Static File Serving
+- **Absolute Resolution**: Updated the Node server to use `path.resolve(__dirname)` for static file serving. This ensures that the server correctly identifies the frontend assets (JS/CSS) even when running in different Docker execution contexts.
+- **Improved SPA Routing**: Added a manual fallback for `index.html` that only triggers if the file actually exists on disk, preventing "masking" of real 404 errors.
 
-### 2. Ecosystem-Aligned Triggering
-- **Command Forwarding**: Updated the `applyBackendControl` logic to use the exact payload format from your original "ecosystem devices" configuration.
-- **Immediate Feedback**: The server updates its memory and saves to disk *before* forwarding the command to the hardware. This makes the UI feel zero-latency and prevents the "flickering" state issue.
+### 2. IP-Agnostic Dashboard Logic
+- **Simplified Networking**: Refactored `api.js` to strictly favor relative paths (`/api`) by default. This makes the dashboard "IP-agnostic"—it will work perfectly whether you access it via `localhost`, `0.0.0.0`, or a LAN IP.
+- **Smart URL Detection**: Added logic to automatically ignore broken or invalid URLs (like `0.0.0.0`) in the browser's local storage.
 
-### 3. Simplified Dashboard Logic
-- **Single Source of Truth**: The React dashboard now strictly trusts the Node server. I removed the redundant browser-side verification loops that were causing confusion.
-- **Reliable Persistence**: Since the Node server is always "on" in the Docker container, it maintains the connection to your hardware even when your browser is closed.
+### 3. Real-time Diagnostics
+- **Server Health Check**: Added a `/api/health` endpoint. You can now visit `http://localhost:3000/api/health` to verify the container is alive.
+- **API Logger**: The Node server now logs every incoming request to the terminal:
+  - `[API] GET /api/devices - 200 (5ms)`
+- **Client-side Logging**: Added `console.log` markers to the React mount process (`index.js`) and `AppShell` so we can see exactly where the app is hanging in your browser's dev tools.
 
-### 4. File-Based Persistence
-- **[device_state.json](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/_original_node_ref/device_state.json)**: The server now saves the current device states to this file on every change and loads it on startup. Your dashboard settings are now persistent through container restarts.
+## How to Verify and Debug
 
-## How to Verify
-
-1.  **Rebuild and Start**:
+1.  **Restart with a Clean Build**:
     ```bash
+    sudo docker compose down --remove-orphans
     sudo docker compose up -d --build
     ```
-2.  **Toggle a Device**:
-    Click a button on the dashboard. You should see the following in the server logs:
-    - `[State] Updating living room / ambient light -> turn_on`
-    - `[Bridge] Forwarding to IoT Hub (http://192.168.29.112:8000/)...`
-3.  **Check Hardware Sync**:
-    - Manually change a device state (if possible).
-    - Wait a few seconds and refresh the dashboard. The status should update to match.
-4.  **Restart Test**:
-    Restart the container and verify that your device states (ON/OFF) are remembered.
+2.  **Verify Server Health**:
+    Visit `http://localhost:3000/api/health`.
+    - **If it says "OK"**: The server is fine.
+    - **If it times out**: The container networking is blocked.
 
-> [!NOTE]
-> I have disabled the "Automation Manager" per your request, focusing strictly on the manual control and status synchronization features.
+3.  **Inspect the Black Screen**:
+    If the screen is still black, open the **Browser Console** (Right-click > Inspect > Console):
+    - **Look for "React mounting..."**: If you see this, the JS bundle loaded correctly.
+    - **Look for "AppShell render"**: This tells us if the authentication layer is hanging.
+
+> [!TIP]
+> If you encounter an error message on the screen, please copy the technical details shown; they will help me identify any remaining issues instantly.

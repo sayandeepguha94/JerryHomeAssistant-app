@@ -26,6 +26,7 @@ function FullScreen({ children }) {
 
 function AppShell() {
   const { user, loading } = useAuth();
+  console.log("[Jerry] AppShell render", { user: !!user, loading });
   if (loading) return <FullScreen>Loading…</FullScreen>;
   return (
     <>

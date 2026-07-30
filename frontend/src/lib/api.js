@@ -4,15 +4,26 @@ const URL_KEY = "jerry_server_url";
 const FALLBACK_URL_KEY = "jerry_fallback_url";
 const TOKEN_KEY = "jerry_token";
 
-let activeNodeUrl = localStorage.getItem(URL_KEY) || process.env.REACT_APP_SERVER_URL || "";
+/**
+ * In consolidated mode, we ALWAYS use relative paths (/api) for the Node server.
+ * This ensures consistency whether you access via localhost, 0.0.0.0, or LAN IP.
+ */
+const getBaseUrl = () => {
+  if (typeof window !== "undefined") {
+    return window.location.origin;
+  }
+  return process.env.REACT_APP_SERVER_URL || "";
+};
 
-// If no URL is set and we're in a browser, default to the current host
-if (!activeNodeUrl && typeof window !== "undefined") {
-  // Use current origin if we are served by the Node server
-  activeNodeUrl = window.location.origin;
-}
+let activeNodeUrl = getBaseUrl();
 
-export const getServerUrl = () => activeNodeUrl;
+export const getServerUrl = () => {
+  const saved = localStorage.getItem(URL_KEY);
+  // Ignore 0.0.0.0 or placeholders that break browsers
+  if (!saved || saved.includes("0.0.0.0")) return getBaseUrl();
+  return saved;
+};
+
 export const getFallbackUrl = () => localStorage.getItem(FALLBACK_URL_KEY) || "";
 
 export const isUsingFallback = () => {
@@ -42,15 +53,21 @@ export const clearServerUrl = () => {
 };
 
 export const api = axios.create({
-  baseURL: activeNodeUrl ? `${activeNodeUrl}/api` : "",
+  baseURL: "/api", // Default to relative path
   timeout: 30000,
 });
 
 api.interceptors.request.use((config) => {
-  if (!config.baseURL || config.baseURL.startsWith("/api")) {
-    config.baseURL = `${activeNodeUrl}/api`;
+  const currentUrl = getServerUrl();
+  const currentOrigin = typeof window !== "undefined" ? window.location.origin : "";
+
+  // If the target server is NOT the same as the page host, use absolute URL
+  if (currentUrl && currentUrl !== currentOrigin) {
+    config.baseURL = `${currentUrl.replace(/\/+$/, "")}/api`;
+  } else {
+    config.baseURL = "/api";
   }
-  // Token handling kept for compatibility if needed later, but backend is gone.
+
   const token = localStorage.getItem(TOKEN_KEY);
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
