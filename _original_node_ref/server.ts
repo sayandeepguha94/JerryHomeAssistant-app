@@ -188,19 +188,21 @@ let shoppingList: ShoppingItem[] = [
 ];
 
 // Helper to forward commands to the actual IoT Hub
-async function forwardToIoTHub(payload: any) {
+async function forwardToIoTHub(path: string, method: string, payload: any) {
   try {
-    console.log(`[Bridge] Forwarding -> ${IOT_HUB_URL}:`, JSON.stringify(payload));
+    const url = new URL(path.startsWith("/") ? path.slice(1) : path, IOT_HUB_URL).toString();
+    console.log(`\x1b[35m[Bridge]\x1b[0m ${method} -> ${url}`);
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
 
-    const response = await fetch(IOT_HUB_URL, {
-      method: "POST",
+    const response = await fetch(url, {
+      method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+      body: payload ? JSON.stringify({
         ...payload,
         timestamp: new Date().toISOString()
-      }),
+      }) : undefined,
       signal: controller.signal
     });
 
@@ -208,17 +210,17 @@ async function forwardToIoTHub(payload: any) {
 
     if (response.ok) {
       const data = await response.json();
-      console.log(`[Bridge] Success from Hub`);
+      console.log(`\x1b[35m[Bridge]\x1b[0m Success from Hub`);
       return data;
     } else {
-      console.error(`[Bridge] Hub error: ${response.status} ${response.statusText}`);
+      console.error(`\x1b[31m[Bridge] Hub error: ${response.status} ${response.statusText}\x1b[0m`);
       return null;
     }
   } catch (err: any) {
     if (err.name === 'AbortError') {
-      console.error(`[Bridge] Hub request timed out`);
+      console.error(`\x1b[31m[Bridge] Hub request timed out\x1b[0m`);
     } else {
-      console.error(`[Bridge] Connection failed:`, err.message);
+      console.error(`\x1b[31m[Bridge] Connection failed:\x1b[0m`, err.message);
     }
     return null;
   }
@@ -227,21 +229,12 @@ async function forwardToIoTHub(payload: any) {
 // Helper to sync device states from the actual hardware hub
 async function syncDevicesWithHardware() {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    const data = await forwardToIoTHub("/api/devices", "GET", null);
+    if (!data) return;
 
-    const response = await fetch(IOT_HUB_URL, {
-      method: "GET",
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-
-    if (response.ok) {
-      const data: any = await response.json();
-      // Data expected to have 'states' or be a direct map of rooms
-      const remoteStates = data.states || data.devices || data;
-      let updatedCount = 0;
+    // Data expected to have 'states' or be a direct map of rooms
+    const remoteStates = data.states || data.devices || data;
+    let updatedCount = 0;
 
       devices.forEach(dev => {
         const roomName = dev.room.toLowerCase();
@@ -317,7 +310,6 @@ async function applyBackendControl(room: string, deviceKey: string | null, actio
     }
   }
 
-  // 1.5 SAVE TO DISK
   saveState();
 
   // 2. FORWARD TO PHYSICAL IOT HUB (Async, don't block state update)
@@ -329,8 +321,8 @@ async function applyBackendControl(room: string, deviceKey: string | null, actio
     value
   };
 
-  forwardToIoTHub(payload).catch(err => {
-    console.error("[Bridge] Background forwarding failed:", err.message);
+  forwardToIoTHub("/api/devices/control", "POST", payload).catch(err => {
+    // console.error("[Bridge] Background forwarding failed:", err.message);
   });
 }
 
