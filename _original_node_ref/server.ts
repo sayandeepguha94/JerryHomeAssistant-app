@@ -26,6 +26,32 @@ app.use((req, res, next) => {
 app.use(express.json());
 
 const PORT = 3000;
+const STATE_FILE = path.join(process.cwd(), "device_state.json");
+
+// Helper to save device state to disk
+function saveState() {
+  try {
+    fs.writeFileSync(STATE_FILE, JSON.stringify(devices, null, 2));
+  } catch (err) {
+    console.error("[State] Failed to save state:", err);
+  }
+}
+
+// Helper to load device state from disk
+function loadState() {
+  try {
+    if (fs.existsSync(STATE_FILE)) {
+      const data = fs.readFileSync(STATE_FILE, "utf8");
+      const loaded = JSON.parse(data);
+      if (Array.isArray(loaded)) {
+        devices = loaded;
+        console.log(`[State] Loaded ${devices.length} devices from disk.`);
+      }
+    }
+  } catch (err) {
+    console.error("[State] Failed to load state:", err);
+  }
+}
 
 // Login Endpoint
 app.post("/api/login", (req, res) => {
@@ -105,11 +131,54 @@ let shoppingList: ShoppingItem[] = [
   { id: "5", text: "Dark Roast Coffee Beans", completed: true, createdAt: Date.now() - 3600000 * 1 },
 ];
 
+// IoT Bridge Configuration
+const IOT_HUB_URL = process.env.IOT_HUB_URL || "http://192.168.29.112:8000/";
+
+// Helper to forward commands to the actual IoT Hub (192.168.29.112)
+async function forwardToIoTHub(payload: any) {
+  try {
+    console.log(`[Bridge] Forwarding to IoT Hub (${IOT_HUB_URL}):`, JSON.stringify(payload));
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
+    const response = await fetch(IOT_HUB_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...payload,
+        timestamp: new Date().toISOString()
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const data = await response.json();
+      console.log(`[Bridge] Success from IoT Hub:`, data);
+      return data;
+    } else {
+      console.error(`[Bridge] IoT Hub error: ${response.status} ${response.statusText}`);
+      return null;
+    }
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      console.error(`[Bridge] IoT Hub request timed out`);
+    } else {
+      console.error(`[Bridge] Failed to connect to IoT Hub:`, err.message);
+    }
+    return null;
+  }
+}
+
 // Helper to update device state
-function applyBackendControl(room: string, deviceKey: string | null, action: string, value?: number) {
+async function applyBackendControl(room: string, deviceKey: string | null, action: string, value?: number) {
   const normalizedRoom = room.toLowerCase();
   const normalizedKey = deviceKey?.toLowerCase() || "";
 
+  console.log(`[State] Updating ${room} / ${deviceKey} -> ${action} (value: ${value})`);
+
+  // 1. UPDATE LOCAL IN-MEMORY STATE IMMEDIATELY (Optimistic)
   if (action === "room_on" || action === "room_off") {
     devices.forEach(dev => {
       if (dev.room.toLowerCase() === normalizedRoom) {
@@ -117,23 +186,42 @@ function applyBackendControl(room: string, deviceKey: string | null, action: str
         dev.statusText = dev.on ? (dev.category === "fan" && dev.value ? `Speed ${dev.value}` : "On") : "Off";
       }
     });
-    return;
-  }
-
-  const dev = devices.find(d => d.room.toLowerCase() === normalizedRoom && d.deviceKey.toLowerCase() === normalizedKey);
-  if (dev) {
-    if (action === "turn_on") {
-      dev.on = true;
-      dev.statusText = dev.category === "fan" && dev.value ? `Speed ${dev.value}` : "On";
-    } else if (action === "turn_off") {
-      dev.on = false;
-      dev.statusText = "Off";
-    } else if (action === "set_fan_speed" && value !== undefined) {
-      dev.on = true;
-      dev.value = value;
-      dev.statusText = `Speed ${value}`;
+  } else {
+    const dev = devices.find(d => d.room.toLowerCase() === normalizedRoom && d.deviceKey.toLowerCase() === normalizedKey);
+    if (dev) {
+      if (action === "turn_on") {
+        dev.on = true;
+        dev.statusText = dev.category === "fan" && dev.value ? `Speed ${dev.value}` : "On";
+      } else if (action === "turn_off") {
+        dev.on = false;
+        dev.statusText = "Off";
+      } else if (action === "set_fan_speed" && value !== undefined) {
+        dev.on = true;
+        dev.value = value;
+        dev.statusText = `Speed ${value}`;
+      }
+      console.log(`[State] Device found and updated: ${dev.id}`);
+    } else {
+      console.warn(`[State] Device NOT found: ${room} / ${deviceKey}`);
     }
   }
+
+  // 1.5 SAVE TO DISK
+  saveState();
+
+  // 2. FORWARD TO PHYSICAL IOT HUB (Async, don't block state update)
+  const payload = {
+    deviceId: deviceKey ? `${room}.${deviceKey}` : null,
+    room,
+    device: deviceKey,
+    action,
+    value
+  };
+
+  // We don't await this to ensure the API response is fast and local state is "sticky"
+  forwardToIoTHub(payload).catch(err => {
+    console.error("[Bridge] Background forwarding failed:", err.message);
+  });
 }
 
 
@@ -334,12 +422,12 @@ app.get("/api/devices", (req, res) => {
 });
 
 // POST /api/devices/control - Update state of a single device manually
-app.post("/api/devices/control", (req, res) => {
+app.post("/api/devices/control", async (req, res) => {
   const { room, device, action, value } = req.body;
   if (!room || !action) {
     return res.status(400).json({ error: "Missing room or action" });
   }
-  applyBackendControl(room, device, action, value);
+  await applyBackendControl(room, device, action, value);
   const updatedDev = devices.find(d => d.room.toLowerCase() === room.toLowerCase() && (!device || d.deviceKey.toLowerCase() === device.toLowerCase()));
   res.json({ success: true, device: updatedDev || null });
 });
@@ -401,7 +489,7 @@ app.get("/termux-client.js", (req, res) => {
 });
 
 // API Route: Parse Commands Locally (non-AI local-only rule engine)
-app.post("/api/parse-command", (req, res) => {
+app.post("/api/parse-command", async (req, res) => {
   const { text } = req.body;
   if (!text || typeof text !== "string") {
     return res.status(400).json({ error: "Missing text command" });
@@ -409,9 +497,9 @@ app.post("/api/parse-command", (req, res) => {
 
   const result = parseCommandRuleBased(text);
   // Persist command results to central in-memory state
-  result.commands.forEach(cmd => {
-    applyBackendControl(cmd.room, cmd.device, cmd.action, cmd.value);
-  });
+  for (const cmd of result.commands) {
+    await applyBackendControl(cmd.room, cmd.device, cmd.action, cmd.value);
+  }
 
   return res.json({
     ...result,
@@ -476,9 +564,9 @@ app.post("/api/parse-audio", upload.single("audio"), async (req, res) => {
     // 2. Parse command to trigger IoT devices
     const result = parseCommandRuleBased(transcript);
     // Persist parsed commands to in-memory state
-    result.commands.forEach(cmd => {
-      applyBackendControl(cmd.room, cmd.device, cmd.action, cmd.value);
-    });
+    for (const cmd of result.commands) {
+      await applyBackendControl(cmd.room, cmd.device, cmd.action, cmd.value);
+    }
 
     // 3. Generate voice response TTS (if API key is present)
     let audioUrl: string | null = null;
@@ -639,6 +727,7 @@ app.post("/api/proxy", async (req, res) => {
 
 // Setup Vite or static serving
 async function startServer() {
+  loadState();
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: {
