@@ -1,0 +1,17 @@
+- [x] Remove Backend Infrastructure
+    - [x] Update `docker-compose.yml`
+    - [x] Update `frontend/nginx.conf`
+    - [x] Delete `backend/` directory
+- [x] Refactor Frontend API & Auth
+    - [x] Update `lib/api.js` to remove Python dependency
+    - [x] Update `lib/auth.jsx` to use mock admin
+- [x] Update Routing & Navigation
+    - [x] Update `App.js` to remove login/user routes
+    - [x] Update `pages/ServerSetup.jsx` redirection
+- [x] Update Feature Pages
+    - [x] Refactor `pages/Dashboard.jsx` for direct Node access
+    - [x] Refactor `pages/Voice.jsx` for direct Node access
+    - [x] Clean up `pages/Shopping.jsx`
+- [x] Verification
+    - [x] Run build/test
+    - [x] Manual check of UI flows

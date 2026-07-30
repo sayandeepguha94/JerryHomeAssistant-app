@@ -16,19 +16,6 @@ export const isUsingFallback = () => {
 
 export const getEffectiveUrl = () => activeNodeUrl;
 
-export const getPythonBackendUrl = () => {
-  if (process.env.NODE_ENV === "production") {
-    // In production, Nginx proxies /api to the backend
-    return `${window.location.protocol}//${window.location.host}`;
-  }
-  return process.env.REACT_APP_PYTHON_BACKEND_URL || "http://192.168.29.112:8000";
-};
-
-export const pythonApi = axios.create({
-  baseURL: getPythonBackendUrl(),
-  timeout: 5000,
-});
-
 export const setServerUrl = (url) => {
   const normalized = url.trim().replace(/\/+$/, "");
   localStorage.setItem(URL_KEY, normalized);
@@ -56,6 +43,7 @@ api.interceptors.request.use((config) => {
   if (!config.baseURL || config.baseURL.startsWith("/api")) {
     config.baseURL = `${activeNodeUrl}/api`;
   }
+  // Token handling kept for compatibility if needed later, but backend is gone.
   const token = localStorage.getItem(TOKEN_KEY);
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
@@ -66,7 +54,6 @@ api.interceptors.response.use(
   async (err) => {
     const originalRequest = err.config;
 
-    // If it's a network error or timeout and we haven't retried with fallback yet
     if ((!err.response || err.code === 'ECONNABORTED' || err.message === 'Network Error') && !originalRequest._retry) {
       const fallback = getFallbackUrl();
       if (fallback) {
@@ -81,18 +68,11 @@ api.interceptors.response.use(
         }
       }
     }
-
-    if (err?.response?.status === 401) {
-      localStorage.removeItem(TOKEN_KEY);
-      if (window.location.pathname !== "/login" && window.location.pathname !== "/server-setup") {
-        window.location.replace("/login");
-      }
-    }
     return Promise.reject(err);
   }
 );
 
-/** Fetch the audio blob for a given id from the Node.js server (auth-protected). */
+/** Fetch the audio blob for a given id from the Node.js server. */
 export async function fetchAudioBlob(audioId) {
   const r = await api.get(`/audio/${audioId}`, { responseType: "blob" });
   return URL.createObjectURL(r.data);

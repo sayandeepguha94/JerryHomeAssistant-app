@@ -26,7 +26,7 @@ export default function ServerSetup({ onSaved }) {
       }
       setServerUrl(v);
       onSaved?.();
-      nav("/login", { replace: true });
+      nav("/", { replace: true });
     } finally {
       setTesting(false);
     }

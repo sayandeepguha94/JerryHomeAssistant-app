@@ -1,24 +1,18 @@
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
-import { AuthProvider, useAuth, hasPage } from "./lib/auth";
+import { AuthProvider, useAuth } from "./lib/auth";
 import { getServerUrl } from "./lib/api";
-import Login from "./pages/Login";
 import ServerSetup from "./pages/ServerSetup";
 import Dashboard from "./pages/Dashboard";
 import Shopping from "./pages/Shopping";
 import Settings from "./pages/Settings";
-import Users from "./pages/Users";
 import BottomNav from "./components/BottomNav";
 
-function Protected({ page, adminOnly, children }) {
-  const { user, loading } = useAuth();
-  const loc = useLocation();
+function Protected({ children }) {
+  const { loading } = useAuth();
   if (!getServerUrl()) return <Navigate to="/server-setup" replace />;
   if (loading) return <FullScreen>Loading…</FullScreen>;
-  if (!user) return <Navigate to="/login" state={{ from: loc }} replace />;
-  if (adminOnly && user.role !== "admin") return <Navigate to="/" replace />;
-  if (page && !hasPage(user, page)) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -36,15 +30,9 @@ function AppShell() {
     <>
       <Routes>
         <Route path="/server-setup" element={<ServerSetup />} />
-        <Route path="/login" element={
-          !hasServer
-            ? <Navigate to="/server-setup" replace />
-            : user ? <Navigate to="/" replace /> : <Login />
-        } />
-        <Route path="/" element={<Protected page="dashboard"><Dashboard /></Protected>} />
-        <Route path="/shopping" element={<Protected page="shopping"><Shopping /></Protected>} />
-        <Route path="/settings" element={<Protected page="settings"><Settings /></Protected>} />
-        <Route path="/users" element={<Protected adminOnly><Users /></Protected>} />
+        <Route path="/" element={<Protected><Dashboard /></Protected>} />
+        <Route path="/shopping" element={<Protected><Shopping /></Protected>} />
+        <Route path="/settings" element={<Protected><Settings /></Protected>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {user && hasServer && <BottomNav />}

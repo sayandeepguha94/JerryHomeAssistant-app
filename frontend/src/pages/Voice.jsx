@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mic, Send, Loader2, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
-import { api, fetchAudioBlob, getPythonBackendUrl } from "../lib/api";
+import { api, fetchAudioBlob } from "../lib/api";
 import { friendlyErr } from "../lib/utils";
 
 export default function Voice() {
@@ -13,7 +13,6 @@ export default function Voice() {
   const mediaRecRef = useRef(null);
   const chunksRef = useRef([]);
   const audioElRef = useRef(null);
-  const pythonUrl = getPythonBackendUrl();
 
   const startRecording = async () => {
     if (recording || processing) return;
@@ -46,56 +45,41 @@ export default function Voice() {
     if (!transcript) return;
     setMessages((m) => [...m, { role: "user", text: transcript }]);
 
-    // 1. Send Transcript to Python Assistant (Proxied via Node)
-    let assistantText = "";
     try {
-      const logicRes = await api.post("/proxy", {
-        url: `${pythonUrl}/`,
-        method: "POST",
-        body: { text: transcript }
-      });
-      if (logicRes.data?.status === "success") {
-        assistantText = logicRes.data.response_message || logicRes.data.message;
-      } else {
-        throw new Error(logicRes.data?.response_message || "Python assistant error");
+      // Direct call to Node.js server for command parsing
+      const res = await api.post("/parse-command", { text: transcript });
+      const { response, audioUrl, audioBase64 } = res.data;
+
+      setMessages((m) => [...m, { role: "assistant", text: response }]);
+
+      if (audioUrl || audioBase64) {
+        await playResponseAudio(audioUrl, audioBase64);
       }
     } catch (err) {
-      console.error("Python logic failed", err);
-      toast.error("Assistant failed to process command");
-      return;
+      console.error("Command processing failed", err);
+      toast.error("Failed to process command");
     }
-
-    if (!assistantText) return;
-    setMessages((m) => [...m, { role: "assistant", text: assistantText }]);
-
-    // 2. Generate TTS for assistant response (via Node)
-    try {
-      const ttsRes = await api.post("/tts", { text: assistantText });
-      const { audioBase64, audioUrl } = ttsRes.data;
-      await playResponseAudio(audioUrl, audioBase64);
-    } catch (err) {
-      console.warn("TTS failed", err);
-    }
-
-    // 3. Trigger a status refresh on the server to sync whatever the assistant changed
-    try { await api.get("/devices"); } catch {}
   };
 
   const sendAudio = async (blob) => {
     setProcessing(true);
     try {
-      // 1. STT (via Node)
       const fd = new FormData();
       fd.append("audio", blob, "recording.webm");
-      const sttRes = await api.post("/parse-audio", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      const { transcript } = sttRes.data;
+      const res = await api.post("/parse-audio", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      const { transcript, response, audioUrl, audioBase64 } = res.data;
 
       if (!transcript) {
         toast.info("Could not understand audio");
         return;
       }
 
-      await processFullLoop(transcript);
+      setMessages((m) => [...m, { role: "user", text: transcript }]);
+      setMessages((m) => [...m, { role: "assistant", text: response }]);
+
+      if (audioUrl || audioBase64) {
+        await playResponseAudio(audioUrl, audioBase64);
+      }
     } catch (e) {
       toast.error(friendlyErr(e));
     } finally {
@@ -128,7 +112,6 @@ export default function Voice() {
         return;
       }
       if (audioUrl) {
-        // Expected format: /api/audio/<id>.wav
         const m = audioUrl.match(/\/api\/audio\/([^./]+)/);
         if (m) {
           const blobUrl = await fetchAudioBlob(m[1]);

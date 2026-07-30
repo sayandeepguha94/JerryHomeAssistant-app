@@ -2,20 +2,17 @@ import React, { useMemo, useState, useCallback, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion";
 import { RefreshCw, Wifi, WifiOff, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
-import { api, pythonApi, isUsingFallback } from "../lib/api";
-import { useAuth } from "../lib/auth";
+import { api } from "../lib/api";
 import { friendlyErr } from "../lib/utils";
 import { useLiveSync } from "../lib/useLiveSync";
 import DeviceCard from "../components/DeviceCard";
 
 export default function Dashboard() {
-  const { user } = useAuth();
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState({});
   const [online, setOnline] = useState(null);
-  const inFlightRef = useRef(0); // # of pending control requests
-  const fallbackMode = isUsingFallback();
+  const inFlightRef = useRef(0);
 
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -32,56 +29,10 @@ export default function Dashboard() {
   const load = useCallback(async (opts = {}) => {
     const { silent = false } = opts;
     if (!silent) setLoading(true);
-    // Skip live-sync while a control action is in-flight so optimistic state isn't clobbered
     if (silent && inFlightRef.current > 0) return;
     try {
-      // Parallelize fetching from Node and Python
-      // If in fallback mode, we skip Python direct check
-      const results = await Promise.allSettled([
-        api.get("/devices"),
-        fallbackMode ? Promise.resolve({ status: "skipped" }) : pythonApi.get("/")
-      ]);
-
-      let list = [];
-      let liveStates = null;
-
-      // Handle Node response (Catalog/Persistence)
-      if (results[0].status === "fulfilled") {
-        list = results[0].value.data;
-      } else {
-        throw results[0].reason; // Fail the load if Node is down
-      }
-
-      // Handle Python response (Live Physical States) DIRECT
-      if (!fallbackMode && results[1].status === "fulfilled" && results[1].value.data?.status === "success") {
-        liveStates = results[1].value.data.states;
-      }
-
-      // Merge live states if available
-      if (liveStates) {
-        list = list.map(d => {
-          const room = d.room.toLowerCase();
-          const key = d.deviceKey.toLowerCase();
-          if (liveStates[room] && liveStates[room][key] !== undefined) {
-            const val = liveStates[room][key];
-            const isOn = val === "on" || val === true || val === 1 || (typeof val === "number" && val > 0) || (typeof val === "string" && parseInt(val) > 0);
-            return {
-              ...d,
-              on: isOn,
-              value: !isNaN(Number(val)) ? Number(val) : d.value,
-              statusText: isOn ? (d.category === "fan" && !isNaN(Number(val)) ? `Speed ${val}` : "On") : "Off"
-            };
-          }
-          return d;
-        });
-      }
-
-      // Non-admin filtering
-      if (user.role !== "admin") {
-        const allowed = new Set(user.allowed_devices || []);
-        list = list.filter((d) => allowed.has(d.id));
-      }
-      setDevices(list);
+      const res = await api.get("/devices");
+      setDevices(res.data);
       setOnline(true);
     } catch (e) {
       if (!silent) toast.error(friendlyErr(e));
@@ -89,9 +40,8 @@ export default function Dashboard() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [user.role, user.allowed_devices, fallbackMode]);
+  }, []);
 
-  // Poll every 4s, and refresh when tab becomes visible / window regains focus
   useLiveSync(() => load({ silent: true }), 4000);
 
   const rooms = useMemo(() => {
@@ -118,15 +68,7 @@ export default function Dashboard() {
         ...(extra.value !== undefined ? { value: extra.value } : {}),
       };
 
-      if (fallbackMode) {
-        // --- FALLBACK MODE: Use Node Proxy Only ---
-        await api.post("/devices/control", body);
-      } else {
-        // --- PRIMARY MODE: Direct Python + Node Persistence ---
-        const pythonPromise = pythonApi.post("/", body);
-        const nodePromise = api.post("/devices/control", body);
-        await Promise.all([pythonPromise, nodePromise]);
-      }
+      await api.post("/devices/control", body);
 
       // optimistic local update
       setDevices((prev) =>
@@ -139,52 +81,30 @@ export default function Dashboard() {
         })
       );
 
-      // --- RELIABILITY LOOP: Direct Verify and Retry ---
+      // --- RELIABILITY LOOP ---
       if (retryCount < 3) {
         setTimeout(async () => {
           try {
-            // Check status from the relevant source
-            let live = null;
-            if (fallbackMode) {
-              const res = await api.get("/devices");
-              const d = res.data.find(x => x.id === id);
-              live = d?.on; // simplified for Node check
-            } else {
-              const checkRes = await pythonApi.get("/");
-              if (checkRes.data?.status === "success") {
-                live = checkRes.data.states[device.room.toLowerCase()]?.[device.deviceKey.toLowerCase()];
-              }
+            const res = await api.get("/devices");
+            const d = res.data.find(x => x.id === id);
+            if (!d) return;
+
+            const expectedOn = (action !== "turn_off");
+            const actualOn = d.on;
+
+            let match = (actualOn === expectedOn);
+            if (match && action === "set_fan_speed" && extra.value !== undefined) {
+              match = (Number(d.value) === extra.value);
             }
 
-            if (live !== null) {
-              const expectedOn = (action !== "turn_off");
-
-              // More robust state matching (handles strings like "On", "1", "true")
-              const actualOn = live && (
-                live === "on" ||
-                live === "On" ||
-                live === true ||
-                live === 1 ||
-                live === "1" ||
-                (typeof live === "number" && live > 0) ||
-                (typeof live === "string" && !isNaN(parseInt(live)) && parseInt(live) > 0)
-              );
-
-              let match = (actualOn === expectedOn);
-              if (match && action === "set_fan_speed" && extra.value !== undefined) {
-                match = (Number(live) === extra.value);
-              }
-
-              if (!match) {
-                console.log(`Verification failed for ${id}, retrying... (${retryCount + 1})`);
-                controlDevice(device, extra, retryCount + 1);
-              } else {
-                setBusy((b) => ({ ...b, [id]: false }));
-              }
+            if (!match) {
+              console.log(`Verification failed for ${id}, retrying... (${retryCount + 1})`);
+              controlDevice(device, extra, retryCount + 1);
+            } else {
+              setBusy((b) => ({ ...b, [id]: false }));
             }
           } catch (err) {
             console.warn("Verification check failed", err);
-            // On failure, don't keep spinner forever
             if (retryCount >= 2) setBusy((b) => ({ ...b, [id]: false }));
           }
         }, 800);
@@ -201,18 +121,10 @@ export default function Dashboard() {
   };
 
   const allRoomOn = async (room) => {
-    if (user.role !== "admin") return;
     inFlightRef.current++;
     try {
       const body = { room, action: "room_on" };
-      if (fallbackMode) {
-        await api.post("/devices/control", body);
-      } else {
-        // Trigger Physical DIRECT
-        await pythonApi.post("/", body);
-        // Persist
-        await api.post("/devices/control", body);
-      }
+      await api.post("/devices/control", body);
       toast.success(`All in ${room} turned ON`);
       load();
     } catch (e) { toast.error(friendlyErr(e)); }
@@ -220,19 +132,12 @@ export default function Dashboard() {
       setTimeout(() => { inFlightRef.current = Math.max(0, inFlightRef.current - 1); }, 300);
     }
   };
+
   const allRoomOff = async (room) => {
-    if (user.role !== "admin") return;
     inFlightRef.current++;
     try {
       const body = { room, action: "room_off" };
-      if (fallbackMode) {
-        await api.post("/devices/control", body);
-      } else {
-        // Trigger Physical DIRECT
-        await pythonApi.post("/", body);
-        // Persist
-        await api.post("/devices/control", body);
-      }
+      await api.post("/devices/control", body);
       toast.success(`All in ${room} turned OFF`);
       load();
     } catch (e) { toast.error(friendlyErr(e)); }
@@ -249,7 +154,6 @@ export default function Dashboard() {
         className="flex items-start justify-between mb-6"
       >
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-white/40">Welcome, {user?.name}</p>
           <h1 className="font-heading text-4xl font-bold leading-tight mt-1">Your <span className="text-[#E05D26]">ecosystem</span>.</h1>
         </div>
         <div className="flex items-center gap-2">
@@ -269,11 +173,7 @@ export default function Dashboard() {
 
       {!loading && devices.length === 0 && (
         <div className="glass rounded-2xl p-6 text-center" data-testid="dashboard-empty">
-          <p className="text-white/60">
-            {user.role === "admin"
-              ? "No devices found. Check that your Node server URL is set correctly in Settings and that the server is reachable."
-              : "You don't have any devices assigned yet. Ask the admin to grant access."}
-          </p>
+          <p className="text-white/60">No devices found. Check your Node server and configuration.</p>
         </div>
       )}
 
@@ -287,13 +187,10 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 * idx }}
             className="mb-4"
-            data-testid={`room-section-${room.replace(/\s+/g, "-")}`}
           >
             <button
               onClick={() => toggleRoom(room)}
               className="w-full flex items-center justify-between mb-3 group"
-              data-testid={`room-toggle-${room.replace(/\s+/g, "-")}`}
-              aria-expanded={isOpen}
             >
               <div className="flex items-center gap-2">
                 <motion.span
@@ -310,28 +207,24 @@ export default function Dashboard() {
                   {activeCount}/{list.length}
                 </span>
               </div>
-              {user.role === "admin" && (
-                <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => allRoomOn(room)}
-                    className="text-[10px] px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-white/70 cursor-pointer"
-                    data-testid={`room-all-on-${room.replace(/\s+/g, "-")}`}
-                  >
-                    ALL ON
-                  </span>
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => allRoomOff(room)}
-                    className="text-[10px] px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-white/70 cursor-pointer"
-                    data-testid={`room-all-off-${room.replace(/\s+/g, "-")}`}
-                  >
-                    ALL OFF
-                  </span>
-                </div>
-              )}
+              <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => allRoomOn(room)}
+                  className="text-[10px] px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-white/70 cursor-pointer"
+                >
+                  ALL ON
+                </span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => allRoomOff(room)}
+                  className="text-[10px] px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-white/70 cursor-pointer"
+                >
+                  ALL OFF
+                </span>
+              </div>
             </button>
             <AnimatePresence initial={false}>
               {isOpen && (

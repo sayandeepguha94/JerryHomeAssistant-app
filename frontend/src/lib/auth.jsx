@@ -1,42 +1,40 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { api } from "./api";
 
 const AuthCtx = createContext(null);
 
+// Mock user since the Python backend is removed.
+const MOCK_ADMIN = {
+  id: "admin",
+  username: "admin",
+  name: "Administrator",
+  role: "admin",
+  allowed_pages: ["dashboard", "voice", "shopping", "settings"],
+  allowed_devices: []
+};
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null); // null = checking; false = logged out; obj = logged in
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(MOCK_ADMIN);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      const t = localStorage.getItem("jerry_token");
-      if (!t) { setUser(false); setLoading(false); return; }
-      try {
-        const r = await api.get("/auth/me");
-        setUser(r.data);
-      } catch {
-        localStorage.removeItem("jerry_token");
-        setUser(false);
-      }
-      setLoading(false);
-    })();
+    // Always keep the user logged in as the mock admin.
+    setUser(MOCK_ADMIN);
+    setLoading(false);
   }, []);
 
   const login = async (username, password) => {
-    const r = await api.post("/auth/login", { username, password });
-    localStorage.setItem("jerry_token", r.data.token);
-    setUser(r.data.user);
-    return r.data.user;
+    // No-op login, just return mock admin
+    setUser(MOCK_ADMIN);
+    return MOCK_ADMIN;
   };
 
   const logout = () => {
-    localStorage.removeItem("jerry_token");
-    setUser(false);
+    // No-op logout
+    setUser(MOCK_ADMIN);
   };
 
   const refresh = async () => {
-    const r = await api.get("/auth/me");
-    setUser(r.data);
+    setUser(MOCK_ADMIN);
   };
 
   return (
@@ -49,13 +47,9 @@ export function AuthProvider({ children }) {
 export const useAuth = () => useContext(AuthCtx);
 
 export function hasPage(user, page) {
-  if (!user) return false;
-  if (user.role === "admin") return true;
-  return (user.allowed_pages || []).includes(page);
+  return true; // Everyone has access to everything now
 }
 
 export function canDevice(user, deviceId) {
-  if (!user) return false;
-  if (user.role === "admin") return true;
-  return (user.allowed_devices || []).includes(deviceId);
+  return true; // Everyone can control everything now
 }
