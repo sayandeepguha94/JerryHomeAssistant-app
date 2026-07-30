@@ -171,6 +171,64 @@ async function forwardToIoTHub(payload: any) {
   }
 }
 
+// Helper to sync device states from the actual hardware hub
+async function syncDevicesWithHardware() {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    const response = await fetch(IOT_HUB_URL, {
+      method: "GET",
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const data: any = await response.json();
+      // Data expected to have 'states' or be a direct map of rooms
+      const remoteStates = data.states || data.devices || data;
+      let updatedCount = 0;
+
+      devices.forEach(dev => {
+        const roomName = dev.room.toLowerCase();
+        const deviceKey = dev.deviceKey?.toLowerCase();
+
+        if (deviceKey && remoteStates[roomName] && remoteStates[roomName][deviceKey] !== undefined) {
+          const rawState = remoteStates[roomName][deviceKey];
+          if (rawState !== null) {
+            const stateStr = String(rawState).toLowerCase();
+
+            if (stateStr === "on" || stateStr === "true" || stateStr === "1") {
+              dev.on = true;
+              dev.statusText = dev.category === "fan" && dev.value ? `Speed ${dev.value}` : "On";
+            } else if (stateStr === "off" || stateStr === "false" || stateStr === "0") {
+              dev.on = false;
+              dev.statusText = "Off";
+            } else {
+              dev.statusText = String(rawState);
+              if (!isNaN(Number(rawState))) {
+                const speedNum = Number(rawState);
+                dev.value = speedNum;
+                dev.on = speedNum > 0;
+              }
+            }
+            updatedCount++;
+          }
+        }
+      });
+
+      if (updatedCount > 0) {
+        saveState();
+        // console.log(`[Sync] Updated ${updatedCount} device states from IoT Hub.`);
+      }
+    }
+  } catch (err: any) {
+    // Silent fail for background sync to avoid log noise
+    // console.warn(`[Sync] Failed to poll IoT Hub: ${err.message}`);
+  }
+}
+
 // Helper to update device state
 async function applyBackendControl(room: string, deviceKey: string | null, action: string, value?: number) {
   const normalizedRoom = room.toLowerCase();
@@ -218,7 +276,6 @@ async function applyBackendControl(room: string, deviceKey: string | null, actio
     value
   };
 
-  // We don't await this to ensure the API response is fast and local state is "sticky"
   forwardToIoTHub(payload).catch(err => {
     console.error("[Bridge] Background forwarding failed:", err.message);
   });
@@ -728,6 +785,11 @@ app.post("/api/proxy", async (req, res) => {
 // Setup Vite or static serving
 async function startServer() {
   loadState();
+
+  // Start background sync with physical hardware
+  syncDevicesWithHardware();
+  setInterval(syncDevicesWithHardware, 5000);
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: {

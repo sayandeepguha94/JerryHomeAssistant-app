@@ -1,40 +1,39 @@
-# Walkthrough: Single Container & Authentication
+# Walkthrough: Centralized IoT Bridge & Status Sync
 
-I have successfully consolidated the project into a single Docker container and implemented a mandatory login screen. The application now runs entirely on port **3000**.
+I have transformed the Node server into the primary manager for your IoT ecosystem. It now handles all communication with your hardware and ensures the dashboard stays accurate through refreshes.
 
 ## Changes Made
 
-### 1. Consolidated Docker Infrastructure
-- **[docker-compose.yml](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/docker-compose.yml)**: Simplified to a single service (`jerry-app`) running on port `3000`.
-- **[_original_node_ref/Dockerfile](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/_original_node_ref/Dockerfile)**: Implemented a multi-stage build:
-  - **Stage 1**: Builds the `frontend/` React dashboard.
-  - **Stage 2**: Bundles the Node server and embeds the frontend build into the `dist` folder.
+### 1. Hardware State Synchronization
+- **Background Polling**: The Node server now calls `GET http://192.168.29.112:8000/` every 5 seconds.
+- **Auto-Update**: If you manually toggle a physical switch, the server detects the change and updates its internal state. This ensures that when you refresh the dashboard, you see the *actual* status of your home.
 
-### 2. Backend Authentication
-- **[server.ts](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/_original_node_ref/server.ts)**: Added a `POST /api/login` endpoint that validates the default credentials (`admin` / `admin0466`).
+### 2. Ecosystem-Aligned Triggering
+- **Command Forwarding**: Updated the `applyBackendControl` logic to use the exact payload format from your original "ecosystem devices" configuration.
+- **Immediate Feedback**: The server updates its memory and saves to disk *before* forwarding the command to the hardware. This makes the UI feel zero-latency and prevents the "flickering" state issue.
 
-### 3. Mandatory Login Flow
-- **[App.js](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/App.js)**: Integrated the Login page into the routing. All other pages are now "Protected" and will redirect to `/login` if no session is found.
-- **[auth.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/lib/auth.jsx)**: Converted from mock state to real authentication. It now calls the backend API and persists the user session in `localStorage`.
+### 3. Simplified Dashboard Logic
+- **Single Source of Truth**: The React dashboard now strictly trusts the Node server. I removed the redundant browser-side verification loops that were causing confusion.
+- **Reliable Persistence**: Since the Node server is always "on" in the Docker container, it maintains the connection to your hardware even when your browser is closed.
 
-### 4. Single-Origin Optimization
-- **[api.js](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/lib/api.js)**: Simplified the URL logic to automatically use the current origin. This ensures the frontend and backend communicate perfectly within the same container.
+### 4. File-Based Persistence
+- **[device_state.json](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/_original_node_ref/device_state.json)**: The server now saves the current device states to this file on every change and loads it on startup. Your dashboard settings are now persistent through container restarts.
 
-## How to Deploy and Verify
+## How to Verify
 
-1.  **Build and Run**:
+1.  **Rebuild and Start**:
     ```bash
     sudo docker compose up -d --build
     ```
-2.  **Access the App**:
-    Visit `http://<your-server-ip>:3000` in your browser.
-3.  **Login**:
-    Use the following credentials:
-    - **Username**: `admin`
-    - **Password**: `admin0466`
-4.  **Verification**:
-    - You should land on the **Dashboard** after a successful login.
-    - All IoT commands and voice features will continue to function via the same container.
+2.  **Toggle a Device**:
+    Click a button on the dashboard. You should see the following in the server logs:
+    - `[State] Updating living room / ambient light -> turn_on`
+    - `[Bridge] Forwarding to IoT Hub (http://192.168.29.112:8000/)...`
+3.  **Check Hardware Sync**:
+    - Manually change a device state (if possible).
+    - Wait a few seconds and refresh the dashboard. The status should update to match.
+4.  **Restart Test**:
+    Restart the container and verify that your device states (ON/OFF) are remembered.
 
-> [!TIP]
-> The separate `frontend/` Dockerfile and Nginx configuration are no longer used. The Node server now handles both the API and serving the static UI files.
+> [!NOTE]
+> I have disabled the "Automation Manager" per your request, focusing strictly on the manual control and status synchronization features.

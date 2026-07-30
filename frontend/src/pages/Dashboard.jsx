@@ -54,9 +54,9 @@ export default function Dashboard() {
     return g;
   }, [devices]);
 
-  const controlDevice = async (device, extra = {}, retryCount = 0) => {
+  const controlDevice = async (device, extra = {}) => {
     const id = device.id;
-    if (retryCount === 0) setBusy((b) => ({ ...b, [id]: true }));
+    setBusy((b) => ({ ...b, [id]: true }));
     inFlightRef.current++;
     try {
       const action = extra.action || (device.on ? "turn_off" : "turn_on");
@@ -68,6 +68,7 @@ export default function Dashboard() {
         ...(extra.value !== undefined ? { value: extra.value } : {}),
       };
 
+      // Node server now handles background hardware triggering and state persistence
       await api.post("/devices/control", body);
 
       // optimistic local update
@@ -80,42 +81,10 @@ export default function Dashboard() {
           return d;
         })
       );
-
-      // --- RELIABILITY LOOP ---
-      if (retryCount < 3) {
-        setTimeout(async () => {
-          try {
-            const res = await api.get("/devices");
-            const d = res.data.find(x => x.id === id);
-            if (!d) return;
-
-            const expectedOn = (action !== "turn_off");
-            const actualOn = d.on;
-
-            let match = (actualOn === expectedOn);
-            if (match && action === "set_fan_speed" && extra.value !== undefined) {
-              match = (Number(d.value) === extra.value);
-            }
-
-            if (!match) {
-              console.log(`Verification failed for ${id}, retrying... (${retryCount + 1})`);
-              controlDevice(device, extra, retryCount + 1);
-            } else {
-              setBusy((b) => ({ ...b, [id]: false }));
-            }
-          } catch (err) {
-            console.warn("Verification check failed", err);
-            if (retryCount >= 2) setBusy((b) => ({ ...b, [id]: false }));
-          }
-        }, 800);
-      } else {
-        setBusy((b) => ({ ...b, [id]: false }));
-      }
-
     } catch (e) {
-      if (retryCount === 0) toast.error(friendlyErr(e));
-      setBusy((b) => ({ ...b, [id]: false }));
+      toast.error(friendlyErr(e));
     } finally {
+      setBusy((b) => ({ ...b, [id]: false }));
       inFlightRef.current = Math.max(0, inFlightRef.current - 1);
     }
   };
