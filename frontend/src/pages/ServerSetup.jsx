@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 
 export default function ServerSetup({ onSaved }) {
   const nav = useNavigate();
-  const [url, setUrl] = useState("");
+  const [url, setUrl] = useState(window.location.origin);
   const [testing, setTesting] = useState(false);
 
   const proceed = async (skipTest) => {

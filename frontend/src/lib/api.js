@@ -6,6 +6,11 @@ const TOKEN_KEY = "jerry_token";
 
 let activeNodeUrl = localStorage.getItem(URL_KEY) || process.env.REACT_APP_SERVER_URL || "";
 
+// If no URL is set and we're in a browser, default to the current host
+if (!activeNodeUrl && typeof window !== "undefined") {
+  activeNodeUrl = `${window.location.protocol}//${window.location.host}`;
+}
+
 export const getServerUrl = () => localStorage.getItem(URL_KEY) || process.env.REACT_APP_SERVER_URL || "";
 export const getFallbackUrl = () => localStorage.getItem(FALLBACK_URL_KEY) || "";
 
