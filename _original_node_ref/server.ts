@@ -78,6 +78,14 @@ function loadAllState() {
         console.log(`[State] Loaded ${devices.length} devices from disk.`);
       }
     }
+    if (fs.existsSync(SHOPPING_FILE)) {
+      const data = fs.readFileSync(SHOPPING_FILE, "utf8");
+      const loaded = JSON.parse(data);
+      if (Array.isArray(loaded)) {
+        shoppingList = loaded;
+        console.log(`[Shopping] Loaded ${shoppingList.length} items from disk.`);
+      }
+    }
     if (fs.existsSync(HUB_CONFIG_FILE)) {
       const data = fs.readFileSync(HUB_CONFIG_FILE, "utf8");
       const config = JSON.parse(data);
@@ -85,6 +93,9 @@ function loadAllState() {
         IOT_HUB_URL = config.url.endsWith("/") ? config.url : `${config.url}/`;
         console.log(`[Config] Loaded Hub URL from disk: ${IOT_HUB_URL}`);
       }
+    } else {
+      // Default fallback if no config exists
+      IOT_HUB_URL = "http://192.168.29.112:8000/";
     }
   } catch (err) {
     console.error("[State] Failed to load state:", err);
@@ -561,22 +572,18 @@ app.get("/api/shopping-list", (req, res) => {
 });
 
 // POST /api/shopping-list - Sync full shopping list state
-app.post("/api/shopping-list", async (req, res) => {
+app.post("/api/shopping-list", (req, res) => {
   const { items } = req.body;
   if (Array.isArray(items)) {
     shoppingList = items;
     saveShopping();
-
-    // Forward to Hub
-    forwardToIoTHub("/api/shopping-list", "POST", { items });
-
     return res.json({ success: true, count: shoppingList.length, items: shoppingList });
   }
   return res.status(400).json({ error: "Invalid items payload" });
 });
 
 // POST /api/shopping-list/add - Add single item
-app.post("/api/shopping-list/add", async (req, res) => {
+app.post("/api/shopping-list/add", (req, res) => {
   const { text } = req.body;
   if (!text || typeof text !== "string") {
     return res.status(400).json({ error: "Missing item text" });
@@ -589,10 +596,6 @@ app.post("/api/shopping-list/add", async (req, res) => {
   };
   shoppingList = [newItem, ...shoppingList];
   saveShopping();
-
-  // Forward to Hub
-  forwardToIoTHub("/api/shopping-list/add", "POST", { text: text.trim() });
-
   return res.json({ success: true, item: newItem, items: shoppingList });
 });
 
@@ -852,11 +855,9 @@ app.post("/api/proxy", async (req, res) => {
 async function startServer() {
   loadAllState();
 
-  // Start background sync with physical hardware
+  // Start background sync with physical hardware (Devices only)
   syncDevicesWithHardware();
-  syncShoppingWithHardware();
   setInterval(syncDevicesWithHardware, 5000);
-  setInterval(syncShoppingWithHardware, 10000);
 
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
