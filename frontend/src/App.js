@@ -14,7 +14,7 @@ function Protected({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <FullScreen>Loading…</FullScreen>;
   if (!user) return <Navigate to="/login" replace />;
-  if (!getServerUrl()) return <Navigate to="/server-setup" replace />;
+  // In single container mode, server URL is always the current origin
   return children;
 }
 
@@ -26,7 +26,6 @@ function FullScreen({ children }) {
 
 function AppShell() {
   const { user, loading } = useAuth();
-  const hasServer = !!getServerUrl();
   if (loading) return <FullScreen>Loading…</FullScreen>;
   return (
     <>
@@ -38,7 +37,7 @@ function AppShell() {
         <Route path="/settings" element={<Protected><Settings /></Protected>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      {user && hasServer && <BottomNav />}
+      {user && <BottomNav />}
     </>
   );
 }

@@ -649,7 +649,10 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    // In production, the compiled server.cjs is located inside the 'dist' folder
+    // along with the built frontend files.
+    const distPath = __dirname;
+    console.log(`[Server] Serving static files from: ${distPath}`);
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));

@@ -12,7 +12,7 @@ if (!activeNodeUrl && typeof window !== "undefined") {
   activeNodeUrl = window.location.origin;
 }
 
-export const getServerUrl = () => localStorage.getItem(URL_KEY) || "";
+export const getServerUrl = () => activeNodeUrl;
 export const getFallbackUrl = () => localStorage.getItem(FALLBACK_URL_KEY) || "";
 
 export const isUsingFallback = () => {
