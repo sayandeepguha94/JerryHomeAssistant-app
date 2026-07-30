@@ -20,7 +20,7 @@ services:
     networks:
       - jerry-network
     ports:
-      - "80:80"
+      - "5000:80"
     restart: always
 
 networks:
