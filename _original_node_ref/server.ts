@@ -236,43 +236,54 @@ async function syncDevicesWithHardware() {
     const remoteStates = data.states || data.devices || data;
     let updatedCount = 0;
 
-      devices.forEach(dev => {
-        const roomName = dev.room.toLowerCase();
-        const deviceKey = dev.deviceKey?.toLowerCase();
+    devices.forEach(dev => {
+      const roomName = dev.room.toLowerCase();
+      const deviceKey = dev.deviceKey?.toLowerCase();
 
-        if (deviceKey && remoteStates[roomName] && remoteStates[roomName][deviceKey] !== undefined) {
-          const rawState = remoteStates[roomName][deviceKey];
-          if (rawState !== null) {
-            const stateStr = String(rawState).toLowerCase();
+      if (deviceKey && remoteStates[roomName] && remoteStates[roomName][deviceKey] !== undefined) {
+        const rawState = remoteStates[roomName][deviceKey];
+        if (rawState !== null) {
+          const stateStr = String(rawState).toLowerCase();
 
-            if (stateStr === "on" || stateStr === "true" || stateStr === "1") {
-              dev.on = true;
-              dev.statusText = dev.category === "fan" && dev.value ? `Speed ${dev.value}` : "On";
-            } else if (stateStr === "off" || stateStr === "false" || stateStr === "0") {
-              dev.on = false;
-              dev.statusText = "Off";
-            } else {
-              dev.statusText = String(rawState);
-              if (!isNaN(Number(rawState))) {
-                const speedNum = Number(rawState);
-                dev.value = speedNum;
-                dev.on = speedNum > 0;
-              }
+          if (stateStr === "on" || stateStr === "true" || stateStr === "1") {
+            dev.on = true;
+            dev.statusText = dev.category === "fan" && dev.value ? `Speed ${dev.value}` : "On";
+          } else if (stateStr === "off" || stateStr === "false" || stateStr === "0") {
+            dev.on = false;
+            dev.statusText = "Off";
+          } else {
+            dev.statusText = String(rawState);
+            if (!isNaN(Number(rawState))) {
+              const speedNum = Number(rawState);
+              dev.value = speedNum;
+              dev.on = speedNum > 0;
             }
-            updatedCount++;
           }
+          updatedCount++;
         }
-      });
-
-      if (updatedCount > 0) {
-        saveState();
-        // console.log(`[Sync] Updated ${updatedCount} device states from IoT Hub.`);
       }
+    });
+
+    if (updatedCount > 0) {
+      saveState();
     }
   } catch (err: any) {
     // Silent fail for background sync to avoid log noise
-    // console.warn(`[Sync] Failed to poll IoT Hub: ${err.message}`);
   }
+}
+
+// Helper to sync shopping list from hardware hub
+async function syncShoppingWithHardware() {
+  try {
+    const data = await forwardToIoTHub("/api/shopping-list", "GET", null);
+    if (data && Array.isArray(data)) {
+      if (JSON.stringify(data) !== JSON.stringify(shoppingList)) {
+        shoppingList = data;
+        saveShopping();
+        console.log(`\x1b[36m[Sync]\x1b[0m Updated shopping list from Hub.`);
+      }
+    }
+  } catch (err) {}
 }
 
 // Helper to update device state
@@ -549,18 +560,23 @@ app.get("/api/shopping-list", (req, res) => {
   res.json(shoppingList);
 });
 
-// POST /api/shopping-list - Sync full shopping list state across all devices
-app.post("/api/shopping-list", (req, res) => {
+// POST /api/shopping-list - Sync full shopping list state
+app.post("/api/shopping-list", async (req, res) => {
   const { items } = req.body;
   if (Array.isArray(items)) {
     shoppingList = items;
+    saveShopping();
+
+    // Forward to Hub
+    forwardToIoTHub("/api/shopping-list", "POST", { items });
+
     return res.json({ success: true, count: shoppingList.length, items: shoppingList });
   }
   return res.status(400).json({ error: "Invalid items payload" });
 });
 
-// POST /api/shopping-list/add - Add single item to central shopping list
-app.post("/api/shopping-list/add", (req, res) => {
+// POST /api/shopping-list/add - Add single item
+app.post("/api/shopping-list/add", async (req, res) => {
   const { text } = req.body;
   if (!text || typeof text !== "string") {
     return res.status(400).json({ error: "Missing item text" });
@@ -572,6 +588,11 @@ app.post("/api/shopping-list/add", (req, res) => {
     createdAt: Date.now()
   };
   shoppingList = [newItem, ...shoppingList];
+  saveShopping();
+
+  // Forward to Hub
+  forwardToIoTHub("/api/shopping-list/add", "POST", { text: text.trim() });
+
   return res.json({ success: true, item: newItem, items: shoppingList });
 });
 
@@ -833,7 +854,9 @@ async function startServer() {
 
   // Start background sync with physical hardware
   syncDevicesWithHardware();
+  syncShoppingWithHardware();
   setInterval(syncDevicesWithHardware, 5000);
+  setInterval(syncShoppingWithHardware, 10000);
 
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
