@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body, #root {
+  height: 100%;
+  background: #0B0C10;
+  color: #ffffff;
+  font-family: "Manrope", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+::selection { background: rgba(224,93,38,0.35); color: white; }
+
+/* Global noise texture overlay */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: url("https://images.pexels.com/photos/17896349/pexels-photo-17896349.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940");
+  background-size: 480px 480px;
+  background-repeat: repeat;
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+}
+
+#root { position: relative; z-index: 1; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+/* Custom range slider (for fan speed / AC temp) */
+input[type="range"].jerry-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 999px;
+  outline: none;
+}
+input[type="range"].jerry-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #E05D26;
+  box-shadow: 0 0 20px rgba(224,93,38,0.6);
+  cursor: pointer;
+}
+input[type="range"].jerry-range::-moz-range-thumb {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #E05D26; border: none;
+  box-shadow: 0 0 20px rgba(224,93,38,0.6);
+}
+
+/* Glass card baseline */
+.glass {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+}
+
+.font-heading { font-family: "Outfit", sans-serif; letter-spacing: -0.02em; }
+
+/* Mic pulse rings */
+@keyframes micPulse {
+  0% { transform: scale(0.95); opacity: 0.5; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+.mic-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid rgba(224,93,38,0.6);
+  animation: micPulse 1.6s ease-out infinite;
+}

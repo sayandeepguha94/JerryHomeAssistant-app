@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Jerry</string>
+    <string name="title_activity_main">Jerry</string>
+    <string name="package_name">com.jerry.voicehome</string>
+    <string name="custom_url_scheme">com.jerry.voicehome</string>
+</resources>

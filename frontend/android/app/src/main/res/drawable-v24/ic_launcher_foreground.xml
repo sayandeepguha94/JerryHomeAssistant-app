@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportHeight="108"
+    android:viewportWidth="108">
+    <!-- Bold "Jerry" text representation in Orange -->
+    <path
+        android:fillColor="#E05D26"
+        android:pathData="M15,40 L25,40 L25,65 Q25,75 15,75 L10,75 L10,65 L15,65 L15,40 Z M30,55 L50,55 L50,60 Q50,75 30,75 L30,55 M30,55 L30,75 M35,65 L45,65 M55,55 L55,75 L65,75 L65,70 L60,70 L60,55 L55,55 M70,55 L70,75 L80,75 L80,70 L75,70 L75,55 L70,55 M85,55 L90,65 L95,55 L100,55 L93,75 L87,75 L80,55 L85,55" />
+</vector>
