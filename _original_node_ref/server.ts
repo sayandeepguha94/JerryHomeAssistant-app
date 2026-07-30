@@ -818,8 +818,7 @@ async function startServer() {
   } else {
     // In production, the compiled server.cjs is located inside the 'dist' folder
     // along with the built frontend files.
-    const distPath = __dirname;
-    console.log(`[Server] Serving static    const distPath = path.resolve(__dirname);
+    const distPath = path.resolve(__dirname);
     console.log(`\x1b[34m[Server]\x1b[0m Production mode: serving from ${distPath}`);
 
     app.use(express.static(distPath, { index: false }));
