@@ -61,10 +61,11 @@ api.interceptors.request.use((config) => {
   const savedUrl = localStorage.getItem(URL_KEY);
   const currentOrigin = typeof window !== "undefined" ? window.location.origin : "";
 
-  // If a custom Node Server is set AND it's different from current host, use it.
+  // If a custom Node Server is set AND it's different from the host we are on, use it.
   if (savedUrl) {
     const normalizedSaved = savedUrl.trim().replace(/\/+$/, "");
-    if (normalizedSaved && !normalizedSaved.includes(window.location.host)) {
+    // If the saved URL is NOT the current page origin, it must be a different server.
+    if (normalizedSaved && normalizedSaved !== currentOrigin) {
       config.baseURL = `${normalizedSaved}/api`;
     } else {
       config.baseURL = "/api";

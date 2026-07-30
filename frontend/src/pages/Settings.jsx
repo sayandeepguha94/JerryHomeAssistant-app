@@ -14,15 +14,19 @@ export default function Settings() {
   const [hubUrl, setHubUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null);
+  const [hubStatus, setHubStatus] = useState(null);
   const [fallbackStatus, setFallbackStatus] = useState(null);
   const isAdmin = user.role === "admin";
 
   useEffect(() => {
     (async () => {
-      // Load hub config from Node server
+      // Load current Hub config from Node server
       try {
         const res = await api.get("/hub-config");
         if (res.data.url) setHubUrl(res.data.url);
+
+        const h = await api.get("/hub-health");
+        setHubStatus(h.data);
       } catch (e) { console.error("Hub config load failed", e); }
 
       const [s, fs] = await Promise.all([
@@ -52,7 +56,13 @@ export default function Settings() {
       // 1. Save Hub Config to Node
       if (h) {
         await api.post("/hub-config", { url: h });
-        toast.success("IoT Hub address updated on server");
+        const hCheck = await api.get("/hub-health");
+        setHubStatus(hCheck.data);
+        if (hCheck.data.online) {
+          toast.success("IoT Hub address updated & reachable");
+        } else {
+          toast.error("IoT Hub saved but appears offline");
+        }
       }
 
       // 2. Save Node Server (Frontend Server)
@@ -131,6 +141,12 @@ export default function Settings() {
         <div className="flex items-center gap-2 mb-3">
           <Server className="w-4 h-4 text-[#B4F733]" />
           <h3 className="font-heading text-lg font-semibold text-[#B4F733]">IoT Hub (Python Backend)</h3>
+          {hubStatus && (
+            <span className={`ml-auto flex items-center gap-1 text-xs px-2 py-1 rounded-full ${hubStatus.online ? "text-[#B4F733]" : "text-red-400"}`}>
+              {hubStatus.online ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+              {hubStatus.online ? "Online" : "Offline"}
+            </span>
+          )}
         </div>
         <p className="text-xs text-white/50 mb-3">
           The address of your Python hardware controller (triggers devices).

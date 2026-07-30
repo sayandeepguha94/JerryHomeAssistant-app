@@ -42,8 +42,9 @@ app.get("/api/health", (req, res) => {
   res.send("OK");
 });
 
-const STATE_FILE = path.join(process.cwd(), "device_state.json");
-const HUB_CONFIG_FILE = path.join(process.cwd(), "hub_config.json");
+const STATE_FILE = path.join(__dirname, "device_state.json");
+const SHOPPING_FILE = path.join(__dirname, "shopping_list.json");
+const HUB_CONFIG_FILE = path.join(__dirname, "hub_config.json");
 
 // IoT Hub Dynamic Configuration
 let IOT_HUB_URL = "http://192.168.29.112:8000/";
@@ -52,7 +53,7 @@ let IOT_HUB_URL = "http://192.168.29.112:8000/";
 function saveHubConfig() {
   try {
     fs.writeFileSync(HUB_CONFIG_FILE, JSON.stringify({ url: IOT_HUB_URL }, null, 2));
-    console.log(`[Config] Saved Hub URL: ${IOT_HUB_URL}`);
+    console.log(`\x1b[32m[Config]\x1b[0m Saved Hub URL: ${IOT_HUB_URL}`);
   } catch (err) {
     console.error("[Config] Failed to save hub config:", err);
   }
@@ -124,6 +125,15 @@ app.post("/api/login", (req, res) => {
 // Hub Config Endpoints
 app.get("/api/hub-config", (req, res) => {
   res.json({ url: IOT_HUB_URL });
+});
+
+app.get("/api/hub-health", async (req, res) => {
+  try {
+    const data = await forwardToIoTHub("/api/devices", "GET", null);
+    res.json({ online: !!data });
+  } catch (e) {
+    res.json({ online: false });
+  }
 });
 
 app.post("/api/hub-config", (req, res) => {
