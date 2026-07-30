@@ -27,6 +27,25 @@ app.use(express.json());
 
 const PORT = 3000;
 
+// Login Endpoint
+app.post("/api/login", (req, res) => {
+  const { username, password } = req.body;
+  if (username === "admin" && password === "admin0466") {
+    return res.json({
+      success: true,
+      user: {
+        id: "admin",
+        username: "admin",
+        name: "Administrator",
+        role: "admin",
+        allowed_pages: ["dashboard", "voice", "shopping", "settings"],
+        allowed_devices: []
+      }
+    });
+  }
+  return res.status(401).json({ error: "Invalid credentials" });
+});
+
 // Centralized Ecosystem Devices State
 interface Device {
   id: string;

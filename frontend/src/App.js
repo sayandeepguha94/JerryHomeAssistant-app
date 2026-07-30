@@ -7,18 +7,20 @@ import ServerSetup from "./pages/ServerSetup";
 import Dashboard from "./pages/Dashboard";
 import Shopping from "./pages/Shopping";
 import Settings from "./pages/Settings";
+import Login from "./pages/Login";
 import BottomNav from "./components/BottomNav";
 
 function Protected({ children }) {
-  const { loading } = useAuth();
-  if (!getServerUrl()) return <Navigate to="/server-setup" replace />;
+  const { user, loading } = useAuth();
   if (loading) return <FullScreen>Loading…</FullScreen>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!getServerUrl()) return <Navigate to="/server-setup" replace />;
   return children;
 }
 
 function FullScreen({ children }) {
   return (
-    <div className="fixed inset-0 grid place-items-center text-white/60 font-body">{children}</div>
+    <div className="fixed inset-0 grid place-items-center text-white/60 font-body bg-[#0B0C10]">{children}</div>
   );
 }
 
@@ -29,7 +31,8 @@ function AppShell() {
   return (
     <>
       <Routes>
-        <Route path="/server-setup" element={<ServerSetup />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/server-setup" element={<Protected><ServerSetup /></Protected>} />
         <Route path="/" element={<Protected><Dashboard /></Protected>} />
         <Route path="/shopping" element={<Protected><Shopping /></Protected>} />
         <Route path="/settings" element={<Protected><Settings /></Protected>} />

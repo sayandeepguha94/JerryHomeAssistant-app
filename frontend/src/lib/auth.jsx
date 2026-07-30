@@ -1,40 +1,39 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import axios from "axios";
 
 const AuthCtx = createContext(null);
-
-// Mock user since the Python backend is removed.
-const MOCK_ADMIN = {
-  id: "admin",
-  username: "admin",
-  name: "Administrator",
-  role: "admin",
-  allowed_pages: ["dashboard", "voice", "shopping", "settings"],
-  allowed_devices: []
-};
+const USER_KEY = "jerry_user";
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(MOCK_ADMIN);
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem(USER_KEY);
+    return saved ? JSON.parse(saved) : null;
+  });
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    // Always keep the user logged in as the mock admin.
-    setUser(MOCK_ADMIN);
-    setLoading(false);
-  }, []);
-
   const login = async (username, password) => {
-    // No-op login, just return mock admin
-    setUser(MOCK_ADMIN);
-    return MOCK_ADMIN;
+    try {
+      const res = await axios.post("/api/login", { username, password });
+      if (res.data.success) {
+        setUser(res.data.user);
+        localStorage.setItem(USER_KEY, JSON.stringify(res.data.user));
+        return res.data.user;
+      }
+      throw new Error("Login failed");
+    } catch (err) {
+      throw err.response?.data?.error || err.message;
+    }
   };
 
   const logout = () => {
-    // No-op logout
-    setUser(MOCK_ADMIN);
+    setUser(null);
+    localStorage.removeItem(USER_KEY);
   };
 
   const refresh = async () => {
-    setUser(MOCK_ADMIN);
+    // Basic refresh from storage
+    const saved = localStorage.getItem(USER_KEY);
+    if (saved) setUser(JSON.parse(saved));
   };
 
   return (

@@ -8,7 +8,8 @@ let activeNodeUrl = localStorage.getItem(URL_KEY) || process.env.REACT_APP_SERVE
 
 // If no URL is set and we're in a browser, default to the current host
 if (!activeNodeUrl && typeof window !== "undefined") {
-  activeNodeUrl = `${window.location.protocol}//${window.location.host}`;
+  // Use current origin if we are served by the Node server
+  activeNodeUrl = window.location.origin;
 }
 
 export const getServerUrl = () => localStorage.getItem(URL_KEY) || "";

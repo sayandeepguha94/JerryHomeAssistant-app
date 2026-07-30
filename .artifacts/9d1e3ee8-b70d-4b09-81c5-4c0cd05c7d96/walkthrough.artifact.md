@@ -1,30 +1,40 @@
-# Walkthrough: Final Fixes & Cleanup
+# Walkthrough: Single Container & Authentication
 
-I have performed a "fix all" pass to ensure the project is fully optimized for your server deployment and free of any Python backend remnants.
+I have successfully consolidated the project into a single Docker container and implemented a mandatory login screen. The application now runs entirely on port **3000**.
 
 ## Changes Made
 
-### 1. Fixed Docker Build Error
-- **[frontend/Dockerfile](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/Dockerfile)**: Explicitly set the build command to `npm run build`. This fixes the "npm run dev" error you encountered during the Docker build.
+### 1. Consolidated Docker Infrastructure
+- **[docker-compose.yml](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/docker-compose.yml)**: Simplified to a single service (`jerry-app`) running on port `3000`.
+- **[_original_node_ref/Dockerfile](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/_original_node_ref/Dockerfile)**: Implemented a multi-stage build:
+  - **Stage 1**: Builds the `frontend/` React dashboard.
+  - **Stage 2**: Bundles the Node server and embeds the frontend build into the `dist` folder.
 
-### 2. Cleaned Up Environment Configuration
-- **[frontend/.env](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/.env)**: Removed `REACT_APP_PYTHON_BACKEND_URL` and commented out hardcoded IP addresses. The app now relies on dynamic host discovery for better portability.
+### 2. Backend Authentication
+- **[server.ts](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/_original_node_ref/server.ts)**: Added a `POST /api/login` endpoint that validates the default credentials (`admin` / `admin0466`).
 
-### 3. Improved API Robustness
-- **[lib/api.js](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/lib/api.js)**: Simplified the server URL logic. It now defaults to the browser's current origin if no specific URL is configured in LocalStorage, which is ideal for Docker environments.
+### 3. Mandatory Login Flow
+- **[App.js](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/App.js)**: Integrated the Login page into the routing. All other pages are now "Protected" and will redirect to `/login` if no session is found.
+- **[auth.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/lib/auth.jsx)**: Converted from mock state to real authentication. It now calls the backend API and persists the user session in `localStorage`.
 
-### 4. Optimized Node Server Container
-- **[_original_node_ref/Dockerfile](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/_original_node_ref/Dockerfile)**: Verified and cleaned up the Node server's Dockerfile to ensure it starts correctly using `tsx`.
+### 4. Single-Origin Optimization
+- **[api.js](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/lib/api.js)**: Simplified the URL logic to automatically use the current origin. This ensures the frontend and backend communicate perfectly within the same container.
 
-## How to Verify on Your Server
+## How to Deploy and Verify
 
-1.  **Pull/Sync changes**: Ensure these updated files are on your server.
-2.  **Run Build**:
+1.  **Build and Run**:
     ```bash
     sudo docker compose up -d --build
     ```
-3.  **Check Logs**:
-    ```bash
-    sudo docker compose logs -f
-    ```
-4.  **Access App**: Visit `http://<your-server-ip>:3001` in your browser. The app should load the Dashboard immediately if the Node server is reachable at the same IP.
+2.  **Access the App**:
+    Visit `http://<your-server-ip>:3000` in your browser.
+3.  **Login**:
+    Use the following credentials:
+    - **Username**: `admin`
+    - **Password**: `admin0466`
+4.  **Verification**:
+    - You should land on the **Dashboard** after a successful login.
+    - All IoT commands and voice features will continue to function via the same container.
+
+> [!TIP]
+> The separate `frontend/` Dockerfile and Nginx configuration are no longer used. The Node server now handles both the API and serving the static UI files.

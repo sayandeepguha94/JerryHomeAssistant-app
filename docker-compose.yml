@@ -1,28 +1,19 @@
 version: '3.8'
 
 services:
-  node-server:
+  jerry-app:
     build:
-      context: ./_original_node_ref
-    container_name: jerry-node-server
+      context: .
+      dockerfile: _original_node_ref/Dockerfile
+    container_name: jerry-home-assistant
     environment:
       - PORT=3000
-    networks:
-      - jerry-network
-    expose:
-      - "3000"
-    restart: always
-
-  frontend:
-    build:
-      context: ./frontend
-    container_name: jerry-frontend
-    networks:
-      - jerry-network
+      - NODE_ENV=production
+      # - GEMINI_API_KEY=your_key_here
     ports:
-      - "3001:80"
+      - "3000:3000"
     restart: always
 
 networks:
-  jerry-network:
-    driver: bridge
+  default:
+    name: jerry-network

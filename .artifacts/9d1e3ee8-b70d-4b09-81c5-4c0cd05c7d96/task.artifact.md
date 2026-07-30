@@ -1,17 +1,9 @@
-- [x] Remove Backend Infrastructure
-    - [x] Update `docker-compose.yml`
-    - [x] Update `frontend/nginx.conf`
-    - [x] Delete `backend/` directory
-- [x] Refactor Frontend API & Auth
-    - [x] Update `lib/api.js` to remove Python dependency
-    - [x] Update `lib/auth.jsx` to use mock admin
-- [x] Update Routing & Navigation
-    - [x] Update `App.js` to remove login/user routes
-    - [x] Update `pages/ServerSetup.jsx` redirection
-- [x] Update Feature Pages
-    - [x] Refactor `pages/Dashboard.jsx` for direct Node access
-    - [x] Refactor `pages/Voice.jsx` for direct Node access
-    - [x] Clean up `pages/Shopping.jsx`
-- [x] Verification
-    - [x] Run build/test
-    - [x] Manual check of UI flows
+# Tasks: Single Container & Login
+
+- [x] Implement `POST /api/login` in `_original_node_ref/server.ts`
+- [x] Update `frontend/src/lib/auth.jsx` for real authentication
+- [x] Integrate Login route in `frontend/src/App.js`
+- [x] Simplify `frontend/src/lib/api.js` for single-origin setup
+- [x] Create multi-stage `Dockerfile` in `_original_node_ref`
+- [x] Clean up `docker-compose.yml` (Use port 3000)
+- [x] Verify build and login flow
