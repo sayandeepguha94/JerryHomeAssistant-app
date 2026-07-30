@@ -11,7 +11,7 @@ if (!activeNodeUrl && typeof window !== "undefined") {
   activeNodeUrl = `${window.location.protocol}//${window.location.host}`;
 }
 
-export const getServerUrl = () => localStorage.getItem(URL_KEY) || process.env.REACT_APP_SERVER_URL || "";
+export const getServerUrl = () => localStorage.getItem(URL_KEY) || "";
 export const getFallbackUrl = () => localStorage.getItem(FALLBACK_URL_KEY) || "";
 
 export const isUsingFallback = () => {
@@ -22,6 +22,7 @@ export const isUsingFallback = () => {
 export const getEffectiveUrl = () => activeNodeUrl;
 
 export const setServerUrl = (url) => {
+  if (!url) return;
   const normalized = url.trim().replace(/\/+$/, "");
   localStorage.setItem(URL_KEY, normalized);
   activeNodeUrl = normalized;

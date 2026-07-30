@@ -8,7 +8,7 @@ RUN npm install
 
 COPY . .
 
-# Pass build args if needed, or rely on runtime window.location
+# Use 'build' script to generate static files for Nginx
 RUN npm run build
 
 # Production stage
