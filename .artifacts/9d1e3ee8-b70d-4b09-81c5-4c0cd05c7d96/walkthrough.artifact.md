@@ -27,4 +27,4 @@ I have performed a "fix all" pass to ensure the project is fully optimized for y
     ```bash
     sudo docker compose logs -f
     ```
-4.  **Access App**: Visit `http://<your-server-ip>:5000` in your browser. The app should load the Dashboard immediately if the Node server is reachable at the same IP.
+4.  **Access App**: Visit `http://<your-server-ip>:3001` in your browser. The app should load the Dashboard immediately if the Node server is reachable at the same IP.

@@ -25,7 +25,7 @@ docker-compose up -d --build
 ```
 
 ### 3. Ports
-- **Frontend**: Accessible on port `5000`.
+- **Frontend**: Accessible on port `3001`.
 - **Node Server**: Internal to the Docker network (proxied via Frontend).
 
 ---
@@ -48,7 +48,7 @@ cd frontend
 npm install
 npm run build
 # Serve the 'build' folder using any web server (nginx, apache, or 'serve' package)
-npx serve -s build -l 5000
+npx serve -s build -l 3001
 ```
 
 ---
