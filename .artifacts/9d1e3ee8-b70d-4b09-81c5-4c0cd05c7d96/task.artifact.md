@@ -1,7 +1,7 @@
-# Tasks: Dual-Server Specialization
+# Tasks: Robust Auth & Smarter Routing
 
-- [x] Fix teammate login (Integrated dual-server routing into auth logic)
-- [x] Make login case-insensitive for usernames
-- [x] Ensure admin account persistence in memory
-- [x] Verify Users page visibility for admin
+- [x] Implement smart origin detection in `api.js` (Fixed localhost bug)
+- [x] Add legacy config migration (Prevent lockouts)
+- [x] Add Login Page connection diagnostics (Show target URL on error)
+- [x] Forcibly ensure Admin account in `server.ts` (Order verification)
 - [x] Verify production build

@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { LogIn, Loader2 } from "lucide-react";
+import { LogIn, Loader2, Info } from "lucide-react";
 import { useAuth } from "../lib/auth";
+import { getServerUrl, getFallbackUrl } from "../lib/api";
 import { friendlyErr } from "../lib/utils";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -12,15 +13,18 @@ export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const onSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
       await login(username.trim().toLowerCase(), password);
       toast.success("Welcome back");
       nav("/", { replace: true });
     } catch (e) {
+      setError(friendlyErr(e));
       toast.error(friendlyErr(e));
     } finally {
       setLoading(false);
@@ -59,56 +63,76 @@ export default function Login() {
           </p>
         </motion.div>
 
-        <motion.form
-          onSubmit={onSubmit}
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.6 }}
-          className="glass rounded-3xl p-6 space-y-5"
-          data-testid="login-form"
-        >
-          <div>
-            <label className="block text-xs uppercase tracking-widest text-white/40 mb-2">
-              Username
-            </label>
-            <input
-              data-testid="login-username-input"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="admin"
-              autoCapitalize="off"
-              autoCorrect="off"
-              className="w-full bg-transparent border-b border-white/20 focus:border-[#E05D26] outline-none py-3 text-lg font-heading"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-xs uppercase tracking-widest text-white/40 mb-2">
-              Password
-            </label>
-            <input
-              data-testid="login-password-input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full bg-transparent border-b border-white/20 focus:border-[#E05D26] outline-none py-3 text-lg font-heading"
-              required
-            />
-          </div>
-          <button
-            data-testid="login-submit-btn"
-            type="submit"
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-[#E05D26] text-white font-heading font-semibold text-lg shadow-[0_0_30px_rgba(224,93,38,0.35)] active:scale-[0.98] transition-transform disabled:opacity-60"
+        <div>
+          <motion.form
+            onSubmit={onSubmit}
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.6 }}
+            className="glass rounded-3xl p-6 space-y-5 mb-4"
+            data-testid="login-form"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
-            {loading ? "Signing in…" : "Enter"}
-          </button>
-          <p className="text-xs text-white/30 text-center">
-            Admin: <span className="text-white/50">admin / admin0466</span>
-          </p>
-        </motion.form>
+            <div>
+              <label className="block text-xs uppercase tracking-widest text-white/40 mb-2">
+                Username
+              </label>
+              <input
+                data-testid="login-username-input"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="admin"
+                autoCapitalize="off"
+                autoCorrect="off"
+                className="w-full bg-transparent border-b border-white/20 focus:border-[#E05D26] outline-none py-3 text-lg font-heading"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs uppercase tracking-widest text-white/40 mb-2">
+                Password
+              </label>
+              <input
+                data-testid="login-password-input"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full bg-transparent border-b border-white/20 focus:border-[#E05D26] outline-none py-3 text-lg font-heading"
+                required
+              />
+            </div>
+            <button
+              data-testid="login-submit-btn"
+              type="submit"
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-[#E05D26] text-white font-heading font-semibold text-lg shadow-[0_0_30px_rgba(224,93,38,0.35)] active:scale-[0.98] transition-transform disabled:opacity-60"
+            >
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
+              {loading ? "Signing in…" : "Enter"}
+            </button>
+            <p className="text-xs text-white/30 text-center">
+              Default: <span className="text-white/50">admin / admin0466</span>
+            </p>
+          </motion.form>
+
+          {error && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="glass rounded-2xl p-4 flex items-start gap-3 border border-red-500/20"
+            >
+              <Info className="w-4 h-4 text-[#E05D26] mt-0.5" />
+              <div className="text-[10px] text-white/50 space-y-1">
+                <p className="font-bold text-red-400">Connection Failed</p>
+                <p>Verify your Node Server IP in Settings if you've changed it.</p>
+                <div className="pt-1 font-mono text-[9px] opacity-70">
+                   <p>Target: {getFallbackUrl()}/api/login</p>
+                   <p>Origin: {window.location.origin}</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </div>
       </div>
     </div>
   );
