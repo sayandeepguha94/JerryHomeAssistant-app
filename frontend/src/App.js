@@ -10,11 +10,13 @@ import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import BottomNav from "./components/BottomNav";
 
-function Protected({ children }) {
+import Users from "./pages/Users";
+
+function Protected({ children, adminOnly = false }) {
   const { user, loading } = useAuth();
   if (loading) return <FullScreen>Loading…</FullScreen>;
   if (!user) return <Navigate to="/login" replace />;
-  // In single container mode, server URL is always the current origin
+  if (adminOnly && user.role !== "admin") return <Navigate to="/" replace />;
   return children;
 }
 
@@ -35,6 +37,7 @@ function AppShell() {
         <Route path="/server-setup" element={<Protected><ServerSetup /></Protected>} />
         <Route path="/" element={<Protected><Dashboard /></Protected>} />
         <Route path="/shopping" element={<Protected><Shopping /></Protected>} />
+        <Route path="/users" element={<Protected adminOnly><Users /></Protected>} />
         <Route path="/settings" element={<Protected><Settings /></Protected>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

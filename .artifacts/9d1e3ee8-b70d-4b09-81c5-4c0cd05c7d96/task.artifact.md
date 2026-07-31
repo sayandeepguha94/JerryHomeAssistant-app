@@ -1,6 +1,7 @@
 # Tasks: Dual-Server Specialization
 
 - [x] Fix Settings.jsx build errors (Removed undefined fallback references)
-- [x] Consolidate Dashboard Server routing (Python vs Node)
-- [x] Remove IoT Hub field and failover logic
+- [x] Add Users page route to App.js
+- [x] Implement admin-only protection for Users route
+- [x] Ensure automatic redirect to login for new users
 - [x] Verify production build
