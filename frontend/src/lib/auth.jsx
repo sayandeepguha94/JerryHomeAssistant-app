@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import axios from "axios";
+import { api } from "./api";
 
 const AuthCtx = createContext(null);
 const USER_KEY = "jerry_user";
@@ -13,7 +13,8 @@ export function AuthProvider({ children }) {
 
   const login = async (username, password) => {
     try {
-      const res = await axios.post("/api/login", { username, password });
+      // Use the configured 'api' instance for specialized dual-server routing
+      const res = await api.post("/login", { username, password });
       if (res.data.success) {
         setUser(res.data.user);
         localStorage.setItem(USER_KEY, JSON.stringify(res.data.user));

@@ -1,36 +1,34 @@
-# Walkthrough: Enhanced Routing & User Management
+# Walkthrough: Fixed Teammate Login & Robust Auth
 
-I have implemented the Users page and ensured that all new visitors are automatically greeted with the login screen.
+I have resolved the issue where only the `admin` account could log in. You can now create and log in as other teammates across your dual-server setup.
 
-## Key Improvements
+## Key Fixes
 
-### 1. Automatic Login Redirect
-Updated the application router to ensure that any unauthenticated visitor is immediately redirected to the **Login Page**. This ensures your ecosystem remains secure from the first visit.
+### 1. Unified Authentication Routing
+Previously, the login page was bypassing your specialized server settings and always trying to log in via the local machine (.112). Since newly created users are saved on your data server (.179), the local machine didn't recognize them.
+- **Fixed**: Integrated the dual-server routing into the authentication logic. The dashboard now correctly asks your **Dashboard Server (Node)** to verify teammate credentials.
 
-### 2. Enabled Users Management
-- **Route Added**: The `/users` route is now active, allowing you to manage your team.
-- **Admin-Only Protection**: The Users page is strictly reserved for the **Admin** role.
-  - The "Users" link in the bottom navigation will only appear if you are logged in as an admin.
-  - If a non-admin manually tries to type `/users` in their browser, they will be automatically redirected back to the Dashboard.
+### 2. Case-Insensitive Login
+Usernames are now case-insensitive. If you create a user as "Dad", you can now log in using "dad", "DAD", or "Dad". This prevents common login failures on mobile devices with auto-capitalization.
 
-### 3. Fixed Production Build Errors
-Resolved the ESLint errors in `Settings.jsx` that were blocking the Docker build process. The application now compiles cleanly for production.
+### 3. Admin Account Safety
+Ensured that the default `admin` account is always present in the server's memory, even if the `users.json` file is missing or corrupted on disk.
+
+### 4. Users Page Visibility
+Confirmed that the **Users** icon in the bottom navigation bar only appears for accounts with the **Admin** role. Regular teammates will have a cleaner interface focusing on devices and shopping.
 
 ## How to Verify
 
-1.  **Restart with a Clean Build**:
+1.  **Rebuild**:
     ```bash
-    sudo docker compose down --remove-orphans
     sudo docker compose up -d --build
     ```
-2.  **First-Time Visit**:
-    - Open the dashboard in an Incognito window or clear your browser cache.
-    - You should be automatically redirected to the **Login Page**.
-3.  **Admin Check**:
+2.  **Create a Teammate**:
     - Log in as `admin`.
-    - Verify that the **Users** icon appears in the bottom navigation bar.
-    - Click it to view and manage users.
-4.  **Regular User Check** (Optional):
-    - Create a regular user in the Users page.
-    - Log out and log back in as that user.
-    - Verify that the **Users** icon is **hidden**.
+    - Go to the **Users** page and create a new teammate (e.g., `teammate` / `pass123`).
+3.  **Test Login**:
+    - Log out.
+    - Log in as the new `teammate`.
+    - You should now be successfully granted access to the dashboard.
+4.  **Confirm Permissions**:
+    - As `teammate`, verify that the **Users** icon is **hidden** in the bottom navigation.

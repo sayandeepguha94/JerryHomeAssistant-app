@@ -148,8 +148,16 @@ function loadAllState() {
     }
     if (fs.existsSync(USERS_FILE)) {
       const data = JSON.parse(fs.readFileSync(USERS_FILE, "utf8"));
-      if (Array.isArray(data)) { users.length = 0; users.push(...data); }
+      if (Array.isArray(data)) {
+        users.length = 0;
+        users.push(...data);
+      }
     }
+    // Always ensure default admin exists in memory
+    if (!users.find(u => u.username === "admin")) {
+      users.push({ id: "admin-1", name: "System Admin", username: "admin", password: "admin0466", role: "admin" });
+    }
+
     if (fs.existsSync(SHOPPING_FILE)) {
       const data = JSON.parse(fs.readFileSync(SHOPPING_FILE, "utf8"));
       if (Array.isArray(data)) shoppingList = data;
@@ -262,10 +270,21 @@ app.get("/api/health", (req, res) => res.send("OK"));
 
 const handleLogin = (req: any, res: any) => {
   const { username, password } = req.body;
-  const user = users.find(u => u.username === username && u.password === password);
-  if (!user) return res.status(401).json({ error: "Invalid credentials" });
+  if (!username || !password) return res.status(400).json({ error: "Missing username or password" });
+
+  const normalizedInput = username.trim().toLowerCase();
+  console.log(`[Auth] Login attempt: ${normalizedInput}`);
+
+  const user = users.find(u => u.username.toLowerCase() === normalizedInput && u.password === password);
+
+  if (!user) {
+    console.warn(`[Auth] Failed login for: ${normalizedInput}`);
+    return res.status(401).json({ error: "Invalid username or password" });
+  }
+
   const token = `mock-token-${user.id}`;
   const { password: _, ...safeUser } = user;
+  console.log(`[Auth] Login successful: ${safeUser.username} (${safeUser.role})`);
   res.json({ success: true, token, user: safeUser });
 };
 
