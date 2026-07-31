@@ -31,6 +31,13 @@ export default function Login() {
     }
   };
 
+  const handleReset = () => {
+    if (window.confirm("Reset connection settings? This will revert to default localhost communication.")) {
+      clearServerUrl();
+      window.location.reload();
+    }
+  };
+
   return (
     <div className="min-h-screen relative overflow-hidden">
       {/* Immersive background */}
@@ -119,17 +126,26 @@ export default function Login() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="glass rounded-2xl p-4 flex items-start gap-3 border border-red-500/20"
+              className="glass rounded-2xl p-4 space-y-3 border border-red-500/20"
             >
-              <Info className="w-4 h-4 text-[#E05D26] mt-0.5" />
-              <div className="text-[10px] text-white/50 space-y-1">
-                <p className="font-bold text-red-400">Connection Failed</p>
-                <p>Verify your Node Server IP in Settings if you've changed it.</p>
-                <div className="pt-1 font-mono text-[9px] opacity-70">
-                   <p>Target: {getFallbackUrl()}/api/login</p>
-                   <p>Origin: {window.location.origin}</p>
+              <div className="flex items-start gap-3">
+                <Info className="w-4 h-4 text-[#E05D26] mt-0.5" />
+                <div className="text-[10px] text-white/50 space-y-1 flex-1">
+                  <p className="font-bold text-red-400">Connection Failed</p>
+                  <p>The dashboard cannot reach your Node Server. Verify the IP below.</p>
+                  <div className="pt-1 font-mono text-[9px] opacity-70">
+                    <p>Target: {getFallbackUrl()}/api/login</p>
+                    <p>Origin: {window.location.origin}</p>
+                  </div>
                 </div>
               </div>
+
+              <button
+                onClick={handleReset}
+                className="w-full py-2 rounded-xl bg-white/5 border border-white/10 text-[10px] font-semibold text-white/70 hover:bg-white/10"
+              >
+                Reset Connection Settings
+              </button>
             </motion.div>
           )}
         </div>
