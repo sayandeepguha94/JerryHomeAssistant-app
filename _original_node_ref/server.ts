@@ -10,7 +10,17 @@ dotenv.config();
 
 const app = express();
 
-// 1. GLOBAL CORS - MUST BE FIRST
+// 1. Request Logger Middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`\x1b[36m[API]\x1b[0m ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
+  });
+  next();
+});
+
+// 2. GLOBAL CORS - MUST BE FIRST
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
@@ -155,11 +165,13 @@ function loadAllState() {
   } catch (err) {}
 }
 
-// THE TRIGGER MECHANISM (Replicated from Frontend Server)
+// THE TRIGGER MECHANISM (Exact Replication from Frontend Server)
 async function executeHubAction(payload: any) {
   try {
-    console.log(`\x1b[35m[Bridge]\x1b[0m Sending command to Python Hub: ${IOT_HUB_URL}`);
-    const response = await fetch(IOT_HUB_URL, {
+    const url = IOT_HUB_URL;
+    console.log(`\x1b[35m[Bridge]\x1b[0m Dispatching POST -> ${url}`);
+
+    const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -169,19 +181,20 @@ async function executeHubAction(payload: any) {
     });
 
     if (response.ok) {
-      console.log(`\x1b[32m[Bridge]\x1b[0m Trigger dispatched successfully!`);
-      return await response.json();
+      const data = await response.json();
+      console.log(`\x1b[32m[Bridge]\x1b[0m Trigger successful:`, data.message || data.status || "OK");
+      return data;
     } else {
-      console.error(`\x1b[31m[Bridge]\x1b[0m Hub responded with error: ${response.status}`);
+      console.error(`\x1b[31m[Bridge]\x1b[0m Hub error: ${response.status}`);
       return null;
     }
   } catch (err: any) {
-    console.error(`\x1b[31m[Bridge]\x1b[0m Failed to reach Python Hub: ${err.message}`);
+    console.error(`\x1b[31m[Bridge]\x1b[0m Hub unreachable at ${IOT_HUB_URL}: ${err.message}`);
     return null;
   }
 }
 
-// Status Polling Mechanism
+// Status Polling
 async function syncDevicesWithHardware() {
   try {
     const response = await fetch(IOT_HUB_URL);
@@ -208,12 +221,14 @@ async function syncDevicesWithHardware() {
   } catch (err) {}
 }
 
-// Hub Control Wrapper
+// Control Logic
 async function applyBackendControl(room: string, deviceKey: string | null, action: string, value?: number) {
   const normalizedRoom = room.toLowerCase();
   const normalizedKey = deviceKey?.toLowerCase() || "";
 
-  // 1. Update UI State in Memory
+  console.log(`[State] Local update: ${room} / ${deviceKey} -> ${action}`);
+
+  // 1. Memory Update
   if (action === "room_on" || action === "room_off") {
     devices.forEach(dev => {
       if (dev.room.toLowerCase() === normalizedRoom) {
@@ -231,7 +246,7 @@ async function applyBackendControl(room: string, deviceKey: string | null, actio
   }
   saveState();
 
-  // 2. Exact Replication of Payload & Dispatch
+  // 2. Hub Dispatch
   const payload = {
     deviceId: deviceKey ? `${room}.${deviceKey}` : null,
     room,
@@ -239,11 +254,10 @@ async function applyBackendControl(room: string, deviceKey: string | null, actio
     action,
     value
   };
-
   await executeHubAction(payload);
 }
 
-// Endpoints
+// API Endpoints
 app.get("/api/health", (req, res) => res.send("OK"));
 
 const handleLogin = (req: any, res: any) => {
@@ -281,7 +295,6 @@ app.post("/api/users", (req, res) => {
 app.get("/api/devices", (req, res) => res.json(devices));
 app.post("/api/devices/control", async (req, res) => {
   const { room, device, action, value } = req.body;
-  console.log(`\x1b[36m[Control]\x1b[0m ${action} -> ${room}/${device}`);
   await applyBackendControl(room, device, action, value);
   res.json({ success: true });
 });
