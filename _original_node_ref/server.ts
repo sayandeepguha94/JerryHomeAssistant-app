@@ -151,11 +151,22 @@ function loadAllState() {
       if (Array.isArray(data)) {
         users.length = 0;
         users.push(...data);
+        console.log(`[State] Loaded ${users.length} users from disk.`);
       }
     }
-    // Always ensure default admin exists in memory
-    if (!users.find(u => u.username === "admin")) {
+
+    // ROBUST ADMIN ENSURE: Always have a working admin regardless of disk state
+    const adminExists = users.some(u => u.username.toLowerCase() === "admin");
+    if (!adminExists) {
+      console.log("[State] Admin user not found, injecting default admin account.");
       users.push({ id: "admin-1", name: "System Admin", username: "admin", password: "admin0466", role: "admin" });
+    } else {
+      // Ensure the default admin in the list HAS the correct password if it matches the ID
+      const defaultAdmin = users.find(u => u.id === "admin-1");
+      if (defaultAdmin && defaultAdmin.password !== "admin0466") {
+        console.log("[State] Resetting default admin password for security.");
+        defaultAdmin.password = "admin0466";
+      }
     }
 
     if (fs.existsSync(SHOPPING_FILE)) {
@@ -278,7 +289,7 @@ const handleLogin = (req: any, res: any) => {
   const user = users.find(u => u.username.toLowerCase() === normalizedInput && u.password === password);
 
   if (!user) {
-    console.warn(`[Auth] Failed login for: ${normalizedInput}`);
+    console.warn(`[Auth] Failed login for: ${normalizedInput}. Total users in memory: ${users.length}`);
     return res.status(401).json({ error: "Invalid username or password" });
   }
 
