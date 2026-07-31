@@ -1,7 +1,8 @@
-# Tasks: Robust Auth & Smarter Routing
+# Tasks: Robust Auth & Replicated Bridge
 
-- [x] Implement smart origin detection in `api.js` (Fixed localhost bug)
-- [x] Add legacy config migration (Prevent lockouts)
-- [x] Add Login Page connection diagnostics (Show target URL on error)
-- [x] Forcibly ensure Admin account in `server.ts` (Order verification)
-- [x] Verify production build
+- [x] Replicate full-feature `server.ts` (Users, Shopping)
+- [x] Fix teammate login (Integrated dual-server routing)
+- [x] Resolve frontend build errors (Cleaned up Settings.jsx)
+- [x] Add Login Page connection diagnostics
+- [x] Forcibly ensure Admin account on server startup
+- [/] Verify production build (Requires --no-cache)

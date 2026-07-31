@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { LogIn, Loader2, Info } from "lucide-react";
 import { useAuth } from "../lib/auth";
-import { getServerUrl, getFallbackUrl } from "../lib/api";
+import { getServerUrl, getFallbackUrl, clearServerUrl } from "../lib/api";
 import { friendlyErr } from "../lib/utils";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
