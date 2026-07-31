@@ -145,27 +145,6 @@ export default function Settings() {
           className="w-full bg-transparent border-b border-white/20 focus:border-[#E05D26] outline-none py-2 text-base font-heading mb-6"
         />
 
-        <div className="flex items-center gap-2 mb-3">
-          <Server className="w-4 h-4 text-white/40" />
-          <h3 className="font-heading text-lg font-semibold text-white/60">Fallback Server</h3>
-          {fallbackStatus && (
-            <span className={`ml-auto flex items-center gap-1 text-xs px-2 py-1 rounded-full ${fallbackStatus.online ? "text-[#B4F733]" : "text-red-400"}`}>
-              {fallbackStatus.online ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-              {fallbackStatus.online ? "Online" : "Offline"}
-            </span>
-          )}
-        </div>
-        <p className="text-xs text-white/50 mb-3">
-          Optional secondary URL to use if the primary server is unreachable.
-        </p>
-        <input
-          data-testid="settings-fallback-url-input"
-          value={fallbackUrl}
-          onChange={(e) => setFallback(e.target.value)}
-          placeholder="http://192.168.29.179:3000"
-          disabled={!isAdmin}
-          className="w-full bg-transparent border-b border-white/20 focus:border-[#E05D26] outline-none py-2 text-base font-heading"
-        />
         {!isAdmin && (
           <p className="text-xs text-white/30 mt-2">Only admin can modify.</p>
         )}
