@@ -144,7 +144,7 @@ export default function Settings() {
           {hubStatus && (
             <span className={`ml-auto flex items-center gap-1 text-xs px-2 py-1 rounded-full ${hubStatus.online ? "text-[#B4F733]" : "text-red-400"}`}>
               {hubStatus.online ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-              {hubStatus.online ? "Online" : "Offline"}
+              {hubStatus.online ? "Hub Online" : "Hub Offline"}
             </span>
           )}
         </div>
@@ -170,7 +170,7 @@ export default function Settings() {
           )}
         </div>
         <p className="text-xs text-white/50 mb-3">
-          The address of this frontend server (syncs runs/users). Leave <strong>EMPTY</strong> to auto-detect.
+          The address of this frontend server. Leave <strong>EMPTY</strong> for best reliability.
         </p>
         <input
           data-testid="settings-server-url-input"

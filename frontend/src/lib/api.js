@@ -61,10 +61,22 @@ api.interceptors.request.use((config) => {
   const savedUrl = localStorage.getItem(URL_KEY);
   const currentOrigin = typeof window !== "undefined" ? window.location.origin : "";
 
-  // If a custom Node Server is set AND it's different from the host we are on, use it.
+  /**
+   * LOGIC FIX:
+   * If the user is on the Node server (e.g. .179:3000) and tries to set the Node Server
+   * to a DIFFERENT IP (e.g. .112:8000), they are likely confusing the IoT Hub with the Node Server.
+   * We strictly use relapi.interceptors.request.use((config) => {
+  const savedUrl = localStorage.getItem(URL_KEY);
+  const currentOrigin = typeof window !== "undefined" ? window.location.origin : "";
+
+  /**
+   * NETWORKING LOGIC:
+   * 1. If a custom Node Server IP is saved, and it's NOT the current page origin, use it.
+   * 2. This allows accessing the UI from .112 while talking to a Node Server at .179.
+   * 3. Otherwise, use relative paths (/api) for zero-config same-origin communication.
+   */
   if (savedUrl) {
     const normalizedSaved = savedUrl.trim().replace(/\/+$/, "");
-    // If the saved URL is NOT the current page origin, it must be a different server.
     if (normalizedSaved && normalizedSaved !== currentOrigin) {
       config.baseURL = `${normalizedSaved}/api`;
     } else {

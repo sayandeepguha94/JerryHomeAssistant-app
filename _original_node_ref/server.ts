@@ -136,6 +136,15 @@ app.get("/api/hub-health", async (req, res) => {
   }
 });
 
+app.get("/api/hub-health", async (req, res) => {
+  try {
+    const data = await forwardToIoTHub("/api/devices", "GET", null);
+    res.json({ online: !!data });
+  } catch (e) {
+    res.json({ online: false });
+  }
+});
+
 app.post("/api/hub-config", (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: "URL is required" });
@@ -250,6 +259,7 @@ async function forwardToIoTHub(path: string, method: string, payload: any) {
 // Helper to sync device states from the actual hardware hub
 async function syncDevicesWithHardware() {
   try {
+    // RESTORE: Use correct Python Hub status endpoint
     const data = await forwardToIoTHub("/api/devices", "GET", null);
     if (!data) return;
 
@@ -289,22 +299,8 @@ async function syncDevicesWithHardware() {
       saveState();
     }
   } catch (err: any) {
-    // Silent fail for background sync to avoid log noise
+    // Silent fail for background sync
   }
-}
-
-// Helper to sync shopping list from hardware hub
-async function syncShoppingWithHardware() {
-  try {
-    const data = await forwardToIoTHub("/api/shopping-list", "GET", null);
-    if (data && Array.isArray(data)) {
-      if (JSON.stringify(data) !== JSON.stringify(shoppingList)) {
-        shoppingList = data;
-        saveShopping();
-        console.log(`\x1b[36m[Sync]\x1b[0m Updated shopping list from Hub.`);
-      }
-    }
-  } catch (err) {}
 }
 
 // Helper to update device state
@@ -350,11 +346,13 @@ async function applyBackendControl(room: string, deviceKey: string | null, actio
     room,
     device: deviceKey,
     action,
-    value
+    value,
+    timestamp: new Date().toISOString()
   };
 
+  // RESTORE: Use correct Python Hub endpoint
   forwardToIoTHub("/api/devices/control", "POST", payload).catch(err => {
-    // console.error("[Bridge] Background forwarding failed:", err.message);
+    console.error(`\x1b[31m[Bridge] Trigger failed:\x1b[0m ${err.message}`);
   });
 }
 
