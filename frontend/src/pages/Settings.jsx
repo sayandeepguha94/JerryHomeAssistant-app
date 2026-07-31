@@ -67,18 +67,6 @@ export default function Settings() {
     toast[ps.online ? "success" : "error"](ps.online ? "Python server reachable" : "Python server unreachable");
   };
 
-  const handleLogout = () => {
-    logout();
-    nav("/login", { replace: true });
-  };
-
-  const changeServer = () => {
-    if (!window.confirm("Change server? You'll need to log in again.")) return;
-    clearServerUrl();
-    logout();
-    nav("/server-setup", { replace: true });
-  };
-
   return (
     <div className="min-h-screen pb-32 px-5 pt-10 max-w-2xl mx-auto">
       <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-8">

@@ -1,33 +1,34 @@
-# Walkthrough: Simplified Admin-Only Experience
+# Walkthrough: Direct Admin Access & Build Fix
 
-I have streamlined the entire application to remove the account system. The dashboard now opens directly to the Admin interface for instant control.
+I have finalized the transition to a direct-access model and resolved the production build errors.
 
-## Key Simplifications
+## Key Fixes & Simplifications
 
-### 1. Instant Admin Access
-The login screen has been completely removed. When you open the application URL, it now automatically initializes as the **System Admin**. There are no more passwords to enter or tokens to manage.
+### 1. Resolved Build Errors
+Fixed the `logout is not defined` errors in `Settings.jsx`. These were caused by unused functions remaining in the file after the account system was removed. The application now compiles cleanly for production.
 
-### 2. Cleaned Interface
-- **Navigation**: Removed the "Users" icon from the bottom navigation bar to keep the focus on your hardware and shopping list.
-- **Settings**: Stripped away the profile section (Name, Role) and the "Logout" button. The settings page is now a clean panel dedicated strictly to your server configuration.
-- **Security**: The application no longer maintains a user database (`users.json`), reducing server overhead and complexity.
+### 2. Full Removal of Account System
+As requested, I have removed the multi-user account system to allow instant access to the dashboard:
+- **No Login Required**: The login screen is completely gone. When you open the app, you are automatically signed in as the **System Admin**.
+- **Streamlined Navigation**: Removed the "Users" page and navigation icon to keep the focus on your hardware.
+- **Cleaned Settings**: Removed all profile-related sections (Name, Role, Logout) and the "Switch Server" button.
 
-### 3. Permanent Role
-The system is now permanently in "Admin Mode". This ensures that features like **Shopping Suggestion Management** and **Server Configuration** are always available to you without needing to check permissions.
+### 3. Smarter Dual-Server Routing
+Updated the networking logic to be more resilient:
+- The dashboard automatically detects if it's talking to its own host (like `localhost` or its own IP) and uses **Relative Paths** (`/api`) to avoid browser security blocks.
+- **Dashboard Server (Python)**: Configured for device control and hardware polling.
+- **Dashboard Server (Node)**: Configured for Household runs and persistent settings.
 
 ## How to Verify
 
-1.  **Restart the System**:
+1.  **Restart with a Clean Build**:
     ```bash
     sudo docker compose down --remove-orphans
     sudo docker compose up -d --build
     ```
-2.  **Verify Direct Access**:
-    - Open `http://192.168.29.112:3000` in any browser.
-    - **Expected**: You should land directly on the **Ecosystem Dashboard** without seeing a login prompt.
-3.  **Verify UI Cleanup**:
-    - Check the bottom bar; it should only show **Home**, **List**, and **Setup**.
-    - Go to **Setup** (Settings); verify the top "System Admin" card is gone.
-4.  **Functionality Test**:
-    - Toggle a light to ensure the bridge to your Python Hub is still active.
-    - Add a shopping item to ensure the Node server is still saving your data.
+2.  **Verify Instant Access**:
+    - Open `http://192.168.29.112:3000`.
+    - **Expected**: You should land directly on the dashboard without seeing any login prompt.
+3.  **Test Functionality**:
+    - Toggle a device to verify the Python Hub bridge is active.
+    - Add an item to "Household runs" to verify Node server persistence.
