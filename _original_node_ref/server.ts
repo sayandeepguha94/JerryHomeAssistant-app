@@ -10,17 +10,7 @@ dotenv.config();
 
 const app = express();
 
-// 1. Request Logger Middleware
-app.use((req, res, next) => {
-  const start = Date.now();
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    console.log(`\x1b[36m[API]\x1b[0m ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
-  });
-  next();
-});
-
-// 2. GLOBAL CORS - MUST BE FIRST
+// 1. GLOBAL CORS - MUST BE FIRST
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
@@ -36,6 +26,13 @@ app.use((req, res, next) => {
 app.use(express.json());
 
 const PORT = 3000;
+
+// Persistence Paths
+const USERS_FILE = path.join(__dirname, "users.json");
+const SHOPPING_FILE = path.join(__dirname, "shopping_list.json");
+const STATE_FILE = path.join(__dirname, "device_state.json");
+const SUGGESTIONS_FILE = path.join(__dirname, "suggestions.json");
+const HUB_CONFIG_FILE = path.join(__dirname, "hub_config.json");
 
 // Centralized Ecosystem Devices State
 interface Device {
@@ -80,13 +77,6 @@ let devices: Device[] = [
   { id: "bedroom 2.high ambient light", name: "High Ambient Light", room: "bedroom 2", deviceKey: "high ambient light", entityId: "switch.bedroom_2_4node_smart_switch_3_high_ambient_light", category: "lighting", on: false, statusText: "Off" }
 ];
 
-// Persistence Paths
-const USERS_FILE = path.join(__dirname, "users.json");
-const SHOPPING_FILE = path.join(__dirname, "shopping_list.json");
-const STATE_FILE = path.join(__dirname, "device_state.json");
-const SUGGESTIONS_FILE = path.join(__dirname, "suggestions.json");
-const HUB_CONFIG_FILE = path.join(__dirname, "hub_config.json");
-
 // Centralized User State
 interface User {
   id: string;
@@ -127,19 +117,15 @@ let IOT_HUB_URL = "http://192.168.29.112:8000/";
 function saveHubConfig() {
   try { fs.writeFileSync(HUB_CONFIG_FILE, JSON.stringify({ url: IOT_HUB_URL }, null, 2)); } catch (err) {}
 }
-
 function saveState() {
   try { fs.writeFileSync(STATE_FILE, JSON.stringify(devices, null, 2)); } catch (err) {}
 }
-
 function saveUsers() {
   try { fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2)); } catch (err) {}
 }
-
 function saveShopping() {
   try { fs.writeFileSync(SHOPPING_FILE, JSON.stringify(shoppingList, null, 2)); } catch (err) {}
 }
-
 function saveSuggestions() {
   try { fs.writeFileSync(SUGGESTIONS_FILE, JSON.stringify(suggestions, null, 2)); } catch (err) {}
 }
@@ -152,10 +138,7 @@ function loadAllState() {
     }
     if (fs.existsSync(USERS_FILE)) {
       const data = JSON.parse(fs.readFileSync(USERS_FILE, "utf8"));
-      if (Array.isArray(data)) {
-        users.length = 0;
-        users.push(...data);
-      }
+      if (Array.isArray(data)) { users.length = 0; users.push(...data); }
     }
     if (fs.existsSync(SHOPPING_FILE)) {
       const data = JSON.parse(fs.readFileSync(SHOPPING_FILE, "utf8"));
@@ -169,70 +152,68 @@ function loadAllState() {
       const config = JSON.parse(fs.readFileSync(HUB_CONFIG_FILE, "utf8"));
       if (config.url) IOT_HUB_URL = config.url.endsWith("/") ? config.url : `${config.url}/`;
     }
-    console.log(`[State] Loaded all persisted data.`);
-  } catch (err) { console.error("[State] Loading failed:", err); }
+  } catch (err) {}
 }
 
-// IoT Bridge Forwarder
-async function forwardToIoTHub(method: string, payload: any) {
+// THE TRIGGER MECHANISM (Replicated from Frontend Server)
+async function executeHubAction(payload: any) {
   try {
-    const url = IOT_HUB_URL; // Using direct root as per bridge.py
-    console.log(`\x1b[35m[Bridge]\x1b[0m ${method} -> ${url}`);
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-    const response = await fetch(url, {
-      method,
+    console.log(`\x1b[35m[Bridge]\x1b[0m Sending command to Python Hub: ${IOT_HUB_URL}`);
+    const response = await fetch(IOT_HUB_URL, {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: payload ? JSON.stringify({ ...payload, timestamp: new Date().toISOString() }) : undefined,
-      signal: controller.signal
+      body: JSON.stringify({
+        ...payload,
+        timestamp: new Date().toISOString()
+      }),
     });
 
-    clearTimeout(timeoutId);
     if (response.ok) {
-      const data = await response.json();
-      console.log(`\x1b[35m[Bridge]\x1b[0m Success from Hub`);
-      return data;
+      console.log(`\x1b[32m[Bridge]\x1b[0m Trigger dispatched successfully!`);
+      return await response.json();
+    } else {
+      console.error(`\x1b[31m[Bridge]\x1b[0m Hub responded with error: ${response.status}`);
+      return null;
     }
-    console.error(`\x1b[31m[Bridge] Hub error: ${response.status}\x1b[0m`);
-    return null;
   } catch (err: any) {
-    console.error(`\x1b[31m[Bridge] Connection failed:\x1b[0m`, err.message);
+    console.error(`\x1b[31m[Bridge]\x1b[0m Failed to reach Python Hub: ${err.message}`);
     return null;
   }
 }
 
-// Background Sync Loop
+// Status Polling Mechanism
 async function syncDevicesWithHardware() {
   try {
-    const data = await forwardToIoTHub("GET", null);
-    if (data && data.states) {
-      const remoteStates = data.states;
-      let updated = false;
-      devices.forEach(dev => {
-        const roomName = dev.room.toLowerCase();
-        const deviceKey = dev.deviceKey.toLowerCase();
-        if (remoteStates[roomName] && remoteStates[roomName][deviceKey] !== undefined) {
-          const raw = remoteStates[roomName][deviceKey];
-          const isOn = (String(raw).toLowerCase() === "on" || String(raw) === "1" || String(raw) === "true");
-          if (dev.on !== isOn) {
-            dev.on = isOn;
-            dev.statusText = isOn ? (dev.category === "fan" && dev.value ? `Speed ${dev.value}` : "On") : "Off";
-            updated = true;
+    const response = await fetch(IOT_HUB_URL);
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.states) {
+        let updated = false;
+        devices.forEach(dev => {
+          const roomName = dev.room.toLowerCase();
+          const deviceKey = dev.deviceKey.toLowerCase();
+          if (data.states[roomName] && data.states[roomName][deviceKey] !== undefined) {
+            const raw = data.states[roomName][deviceKey];
+            const isOn = (String(raw).toLowerCase() === "on" || String(raw) === "1" || String(raw) === "true");
+            if (dev.on !== isOn) {
+              dev.on = isOn;
+              dev.statusText = isOn ? (dev.category === "fan" && dev.value ? `Speed ${dev.value}` : "On") : "Off";
+              updated = true;
+            }
           }
-        }
-      });
-      if (updated) saveState();
+        });
+        if (updated) saveState();
+      }
     }
   } catch (err) {}
 }
 
-// Hub Control Helper
+// Hub Control Wrapper
 async function applyBackendControl(room: string, deviceKey: string | null, action: string, value?: number) {
   const normalizedRoom = room.toLowerCase();
   const normalizedKey = deviceKey?.toLowerCase() || "";
 
-  // 1. Update Memory
+  // 1. Update UI State in Memory
   if (action === "room_on" || action === "room_off") {
     devices.forEach(dev => {
       if (dev.room.toLowerCase() === normalizedRoom) {
@@ -250,7 +231,7 @@ async function applyBackendControl(room: string, deviceKey: string | null, actio
   }
   saveState();
 
-  // 2. Forward to Python Hub (bridge.py expects deviceId, action, value at root /)
+  // 2. Exact Replication of Payload & Dispatch
   const payload = {
     deviceId: deviceKey ? `${room}.${deviceKey}` : null,
     room,
@@ -259,15 +240,16 @@ async function applyBackendControl(room: string, deviceKey: string | null, actio
     value
   };
 
-  // Await the forwarding to ensure it finishes before response
-  await forwardToIoTHub("POST", payload);
+  await executeHubAction(payload);
 }
 
-// AUTH Endpoints
+// Endpoints
+app.get("/api/health", (req, res) => res.send("OK"));
+
 const handleLogin = (req: any, res: any) => {
   const { username, password } = req.body;
   const user = users.find(u => u.username === username && u.password === password);
-  if (!user) return res.status(401).json({ error: "Invalid username or password" });
+  if (!user) return res.status(401).json({ error: "Invalid credentials" });
   const token = `mock-token-${user.id}`;
   const { password: _, ...safeUser } = user;
   res.json({ success: true, token, user: safeUser });
@@ -286,7 +268,6 @@ app.get("/api/auth/me", (req, res) => {
   res.json(safeUser);
 });
 
-// User Management
 app.get("/api/users", (req, res) => res.json(users.map(({ password: _, ...u }) => u)));
 app.post("/api/users", (req, res) => {
   const { username, password, name } = req.body;
@@ -297,20 +278,18 @@ app.post("/api/users", (req, res) => {
   res.json(newUser);
 });
 
-// Device Control
 app.get("/api/devices", (req, res) => res.json(devices));
 app.post("/api/devices/control", async (req, res) => {
   const { room, device, action, value } = req.body;
-  console.log(`[Control] Received ${action} for ${room}/${device}`);
+  console.log(`\x1b[36m[Control]\x1b[0m ${action} -> ${room}/${device}`);
   await applyBackendControl(room, device, action, value);
   res.json({ success: true });
 });
 
-// Hub Management
 app.get("/api/hub-config", (req, res) => res.json({ url: IOT_HUB_URL }));
 app.get("/api/hub-health", async (req, res) => {
-  const data = await forwardToIoTHub("GET", null);
-  res.json({ online: !!data });
+  const response = await fetch(IOT_HUB_URL).catch(() => null);
+  res.json({ online: !!(response && response.ok) });
 });
 app.post("/api/hub-config", (req, res) => {
   IOT_HUB_URL = req.body.url.endsWith("/") ? req.body.url : `${req.body.url}/`;
@@ -318,7 +297,6 @@ app.post("/api/hub-config", (req, res) => {
   res.json({ success: true });
 });
 
-// Shopping List
 app.get("/api/shopping-list", (req, res) => res.json(shoppingList));
 app.post("/api/shopping-list", (req, res) => {
   shoppingList = req.body.items || [];
@@ -333,14 +311,21 @@ app.post("/api/shopping-list/add", (req, res) => {
 });
 app.get("/api/shopping-suggestions", (req, res) => res.json(suggestions));
 
-// Command Proxy
-app.post("/api/parse-command", async (req, res) => {
-  const result = await forwardToIoTHub("POST", { query: req.body.text });
-  if (result) res.json(result);
-  else res.status(502).json({ error: "Hub unreachable" });
+app.post("/api/proxy", async (req, res) => {
+  const { url, method, body } = req.body;
+  try {
+    const r = await fetch(url, {
+      method: method || "GET",
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const data = await r.json();
+    res.status(r.status).json(data);
+  } catch (e: any) {
+    res.status(502).json({ error: e.message });
+  }
 });
 
-// Setup Vite or static serving
 async function startServer() {
   loadAllState();
   setInterval(syncDevicesWithHardware, 5000);

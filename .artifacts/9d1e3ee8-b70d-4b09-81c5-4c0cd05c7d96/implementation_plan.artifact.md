@@ -1,38 +1,42 @@
-# Implementation Plan: Reliable Hub Triggering & Status Polling
+# Implementation Plan: Exact Replication of Frontend Server Trigger Mechanism
 
-The goal is to ensure the Node server correctly forwards manual dashboard triggers (POST) and background status requests (GET) to the Python Hub, while maintaining the full feature set (Users, Shopping List).
+The goal is to update the Node server's `applyBackendControl` function to use the exact triggering logic and payload structure found in the working "frontend server" (`App.tsx`).
 
 ## User Review Required
 
 > [!IMPORTANT]
-> **Endpoint Paths**: Based on your `bridge.py`, I will configure the Node server to talk to the **ROOT path (`/`)** of the Python Hub for both GET and POST requests.
+> **Mechanism Change**: Instead of a separate bridge helper, I will inline the triggering logic into `applyBackendControl` to match the "frontend server" style exactly. This includes using the `timestamp` field and the same payload structure.
 >
-> **Room Actions**: I am fixing a bug where "Room ON/OFF" buttons only updated the UI but didn't actually send commands to the Python backend.
+> **Endpoint Path**: I will continue using the **ROOT path (`/`)** of the Python Hub, as confirmed by your successful manual trigger logs.
 
 ## Proposed Changes
 
 ### Backend (`_original_node_ref/server.ts`)
 
 #### [MODIFY] [server.ts](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/_original_node_ref/server.ts)
-- **Replicate User Logic**: Re-implement the full-feature code you provided (Users, Shopping suggestions).
-- **Corrected Bridge Forwarder**:
-  - Update `forwardToIoTHub` to hit the Hub root (`/`).
-  - Add `await` to `fetch` calls to ensure requests complete before responding to the browser.
-  - Add explicit `console.log` for every manual trigger so you can see it in your terminal.
-- **Fixed `applyBackendControl`**:
-  - Removed the `return` statement that was preventing "Room" commands from reaching the Python backend.
-  - Ensured the `deviceId` payload matches your `room.deviceKey` format.
-- **Reliable Persistence**:
-  - Standardized JSON storage using `__dirname` to ensure it works correctly inside Docker containers.
+- **Exact Payload Replication**:
+  ```typescript
+  const payload = {
+    deviceId: deviceKey ? `${room}.${deviceKey}` : null,
+    room,
+    device: deviceKey,
+    action,
+    value,
+    timestamp: new Date().toISOString()
+  };
+  ```
+- **Direct Dispatch**: Use `fetch(IOT_HUB_URL, { method: "POST", ... })` inside `applyBackendControl` immediately after the local state update, matching the sequential flow in `App.tsx`.
+- **Enhanced Logging**: Log the outgoing request and the Hub's response status to the Node terminal for visibility.
 
 ## Verification Plan
 
 ### Manual Verification
 1.  **Deploy**: `sudo docker compose up -d --build`.
-2.  **Settings**: Verify **IoT Hub (Python Backend)** is set to `http://192.168.29.112:8000`.
-3.  **Individual Trigger**: Click a light button.
-    - Check Node logs for: `[Bridge] POST -> http://...`
-    - Check Python logs for: `-> Executed turn_on(...)`
-4.  **Room Trigger**: Click "ALL ON" for a room.
-    - Verify all physical devices in that room respond.
-5.  **Polling**: Verify Python logs show `GET /` requests every 5 seconds.
+2.  **Access Dashboard**: Access via `http://192.168.29.112:3000`.
+3.  **Settings**:
+    - **Dashboard Server**: `http://192.168.29.179:3000`.
+    - **IoT Hub**: `http://192.168.29.112:8000`.
+4.  **Individual Trigger**: Click a light button.
+    - Verify physical device response.
+    - Verify Node terminal shows `[Bridge] Trigger success`.
+5.  **Room Trigger**: Click "ALL ON" for a room and verify physical response.

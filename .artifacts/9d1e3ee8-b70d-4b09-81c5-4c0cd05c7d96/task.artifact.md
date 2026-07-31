@@ -1,9 +1,8 @@
-# Tasks: Reliable Hub Triggering & Status Polling
+# Tasks: Exact Trigger Replication
 
-- [x] Replicate full-feature `server.ts` (Users, Shopping suggestions)
-- [x] Remove early `return` in `applyBackendControl` (Fixed Room actions)
-- [x] Add `await` to bridge forwarding (Ensure completion)
-- [x] Align Hub endpoint to root `/` for both GET and POST
-- [x] Add explicit console logging for triggers
-- [x] Standardize persistence pathing for Docker
-- [x] Verify triggers and sync simultaneously
+- [x] Use Turn 29 code as the base for `server.ts`
+- [x] Inject Hub configuration logic (`hub_config.json`)
+- [x] Re-implement `applyBackendControl` with the exact `App.tsx` logic
+- [x] Ensure `timestamp` is included in the payload
+- [x] Add background status polling to root `/`
+- [x] Verify triggers show up in Python logs as `POST /`
