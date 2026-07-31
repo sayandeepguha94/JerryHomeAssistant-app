@@ -37,11 +37,6 @@ app.use(express.json());
 
 const PORT = 3000;
 
-// Health check
-app.get("/api/health", (req, res) => {
-  res.send("OK");
-});
-
 // Centralized Ecosystem Devices State
 interface Device {
   id: string;
@@ -85,6 +80,13 @@ let devices: Device[] = [
   { id: "bedroom 2.high ambient light", name: "High Ambient Light", room: "bedroom 2", deviceKey: "high ambient light", entityId: "switch.bedroom_2_4node_smart_switch_3_high_ambient_light", category: "lighting", on: false, statusText: "Off" }
 ];
 
+// Persistence Paths
+const USERS_FILE = path.join(__dirname, "users.json");
+const SHOPPING_FILE = path.join(__dirname, "shopping_list.json");
+const STATE_FILE = path.join(__dirname, "device_state.json");
+const SUGGESTIONS_FILE = path.join(__dirname, "suggestions.json");
+const HUB_CONFIG_FILE = path.join(__dirname, "hub_config.json");
+
 // Centralized User State
 interface User {
   id: string;
@@ -97,13 +99,7 @@ interface User {
 }
 
 const users: User[] = [
-  {
-    id: "admin-1",
-    name: "System Admin",
-    username: "admin",
-    password: "admin0466",
-    role: "admin"
-  }
+  { id: "admin-1", name: "System Admin", username: "admin", password: "admin0466", role: "admin" }
 ];
 
 // Centralized Shopping List State
@@ -114,13 +110,7 @@ interface ShoppingItem {
   createdAt: number;
 }
 
-let shoppingList: ShoppingItem[] = [
-  { id: "1", text: "Organic Milk (1 Gallon)", completed: false, createdAt: Date.now() - 3600000 * 5 },
-  { id: "2", text: "Whole Grain Sourdough Bread", completed: true, createdAt: Date.now() - 3600000 * 4 },
-  { id: "3", text: "Free Range Eggs (12 pk)", completed: false, createdAt: Date.now() - 3600000 * 3 },
-  { id: "4", text: "Fresh Avocados & Bananas", completed: false, createdAt: Date.now() - 3600000 * 2 },
-  { id: "5", text: "Dark Roast Coffee Beans", completed: true, createdAt: Date.now() - 3600000 * 1 },
-];
+let shoppingList: ShoppingItem[] = [];
 
 let suggestions: string[] = [
   "potato / আলু", "tomato / টমেটো", "onion / পেঁয়াজ", "milk / দুধ", "Ginger / আদা",
@@ -130,27 +120,14 @@ let suggestions: string[] = [
   "Protine Atta / প্রোটিন আটা"
 ];
 
-// Persistence Paths
-const USERS_FILE = path.join(__dirname, "users.json");
-const SHOPPING_FILE = path.join(__dirname, "shopping_list.json");
-const STATE_FILE = path.join(__dirname, "device_state.json");
-const SUGGESTIONS_FILE = path.join(__dirname, "suggestions.json");
-const HUB_CONFIG_FILE = path.join(__dirname, "hub_config.json");
-
 // IoT Hub Dynamic Configuration
 let IOT_HUB_URL = "http://192.168.29.112:8000/";
 
-// Helper to save hub config
+// Persistence Helpers
 function saveHubConfig() {
-  try {
-    fs.writeFileSync(HUB_CONFIG_FILE, JSON.stringify({ url: IOT_HUB_URL }, null, 2));
-    console.log(`\x1b[32m[Config]\x1b[0m Hub URL persisted: ${IOT_HUB_URL}`);
-  } catch (err) {
-    console.error("[Config] Failed to save hub config:", err);
-  }
+  try { fs.writeFileSync(HUB_CONFIG_FILE, JSON.stringify({ url: IOT_HUB_URL }, null, 2)); } catch (err) {}
 }
 
-// Persistence Helpers
 function saveState() {
   try { fs.writeFileSync(STATE_FILE, JSON.stringify(devices, null, 2)); } catch (err) {}
 }
@@ -199,11 +176,12 @@ function loadAllState() {
 // IoT Bridge Forwarder
 async function forwardToIoTHub(method: string, payload: any) {
   try {
-    console.log(`\x1b[35m[Bridge]\x1b[0m ${method} -> ${IOT_HUB_URL}`);
+    const url = IOT_HUB_URL; // Using direct root as per bridge.py
+    console.log(`\x1b[35m[Bridge]\x1b[0m ${method} -> ${url}`);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    const response = await fetch(IOT_HUB_URL, {
+    const response = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
       body: payload ? JSON.stringify({ ...payload, timestamp: new Date().toISOString() }) : undefined,
@@ -211,7 +189,11 @@ async function forwardToIoTHub(method: string, payload: any) {
     });
 
     clearTimeout(timeoutId);
-    if (response.ok) return await response.json();
+    if (response.ok) {
+      const data = await response.json();
+      console.log(`\x1b[35m[Bridge]\x1b[0m Success from Hub`);
+      return data;
+    }
     console.error(`\x1b[31m[Bridge] Hub error: ${response.status}\x1b[0m`);
     return null;
   } catch (err: any) {
@@ -269,11 +251,19 @@ async function applyBackendControl(room: string, deviceKey: string | null, actio
   saveState();
 
   // 2. Forward to Python Hub (bridge.py expects deviceId, action, value at root /)
-  const payload = { deviceId: deviceKey ? `${room}.${deviceKey}` : null, room, device: deviceKey, action, value };
-  forwardToIoTHub("POST", payload);
+  const payload = {
+    deviceId: deviceKey ? `${room}.${deviceKey}` : null,
+    room,
+    device: deviceKey,
+    action,
+    value
+  };
+
+  // Await the forwarding to ensure it finishes before response
+  await forwardToIoTHub("POST", payload);
 }
 
-// AUTH Endpoints (Supporting both existing UI and reference repo)
+// AUTH Endpoints
 const handleLogin = (req: any, res: any) => {
   const { username, password } = req.body;
   const user = users.find(u => u.username === username && u.password === password);
@@ -311,6 +301,7 @@ app.post("/api/users", (req, res) => {
 app.get("/api/devices", (req, res) => res.json(devices));
 app.post("/api/devices/control", async (req, res) => {
   const { room, device, action, value } = req.body;
+  console.log(`[Control] Received ${action} for ${room}/${device}`);
   await applyBackendControl(room, device, action, value);
   res.json({ success: true });
 });
@@ -330,7 +321,7 @@ app.post("/api/hub-config", (req, res) => {
 // Shopping List
 app.get("/api/shopping-list", (req, res) => res.json(shoppingList));
 app.post("/api/shopping-list", (req, res) => {
-  shoppingList = req.body.items;
+  shoppingList = req.body.items || [];
   saveShopping();
   res.json({ success: true });
 });
@@ -349,14 +340,7 @@ app.post("/api/parse-command", async (req, res) => {
   else res.status(502).json({ error: "Hub unreachable" });
 });
 
-// Lazy Gemini
-let aiClient: GoogleGenAI | null = null;
-function getGeminiClient(): GoogleGenAI {
-  if (!aiClient) aiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-  return aiClient;
-}
-
-// Server Startup
+// Setup Vite or static serving
 async function startServer() {
   loadAllState();
   setInterval(syncDevicesWithHardware, 5000);

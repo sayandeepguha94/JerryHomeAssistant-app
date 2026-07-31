@@ -1,32 +1,38 @@
-# Implementation Plan: Reliability Pass (Line by Line Fix)
+# Implementation Plan: Reliable Hub Triggering & Status Polling
 
-Fix the "black screen" and "sync inconsistencies" by making the application IP-agnostic and ensuring the static assets are served reliably from the Docker container.
+The goal is to ensure the Node server correctly forwards manual dashboard triggers (POST) and background status requests (GET) to the Python Hub, while maintaining the full feature set (Users, Shopping List).
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Endpoint Paths**: Based on your `bridge.py`, I will configure the Node server to talk to the **ROOT path (`/`)** of the Python Hub for both GET and POST requests.
+>
+> **Room Actions**: I am fixing a bug where "Room ON/OFF" buttons only updated the UI but didn't actually send commands to the Python backend.
 
 ## Proposed Changes
 
 ### Backend (`_original_node_ref/server.ts`)
 
 #### [MODIFY] [server.ts](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/_original_node_ref/server.ts)
-- **Robust Static Serving**: Use `path.resolve(__dirname)` for all static file operations. This is the most reliable way when running a bundled Node script in Docker.
-- **Diagnostic Endpoint**: Add `GET /api/health` to verify that the container is reachable and responding.
-- **Request Logging**: Log every incoming API request with its method and status code to ensure we have visibility in the terminal.
-
-### Frontend (`frontend/src/`)
-
-#### [MODIFY] [lib/api.js](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/lib/api.js)
-- **IP-Agnostic Defaults**: Refactor the URL detection. If the saved server URL is empty or invalid (like `0.0.0.0`), strictly default to `window.location.origin`.
-- **Automatic Fallback**: If the app is being served by the Node server, it should use relative paths (`/api`) by default to avoid CORS and caching issues.
-
-#### [MODIFY] [App.js](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/App.js)
-- **State Logging**: Add console logs during the initialization phase to see exactly where the boot process is hanging (if at all).
-
----
+- **Replicate User Logic**: Re-implement the full-feature code you provided (Users, Shopping suggestions).
+- **Corrected Bridge Forwarder**:
+  - Update `forwardToIoTHub` to hit the Hub root (`/`).
+  - Add `await` to `fetch` calls to ensure requests complete before responding to the browser.
+  - Add explicit `console.log` for every manual trigger so you can see it in your terminal.
+- **Fixed `applyBackendControl`**:
+  - Removed the `return` statement that was preventing "Room" commands from reaching the Python backend.
+  - Ensured the `deviceId` payload matches your `room.deviceKey` format.
+- **Reliable Persistence**:
+  - Standardized JSON storage using `__dirname` to ensure it works correctly inside Docker containers.
 
 ## Verification Plan
 
 ### Manual Verification
-1. **Build**: `sudo docker compose up -d --build`.
-2. **Health Check**: Visit `http://localhost:3000/api/health`. It should return "OK".
-3. **Login**: Verify you can log in and reach the Dashboard.
-4. **Console Check**: Open browser console and verify "React mounting..." and "AppShell render" logs appear.
-5. **Sync Test**: Toggle a device and verify the terminal logs show the `[API] POST /api/devices/control` request.
+1.  **Deploy**: `sudo docker compose up -d --build`.
+2.  **Settings**: Verify **IoT Hub (Python Backend)** is set to `http://192.168.29.112:8000`.
+3.  **Individual Trigger**: Click a light button.
+    - Check Node logs for: `[Bridge] POST -> http://...`
+    - Check Python logs for: `-> Executed turn_on(...)`
+4.  **Room Trigger**: Click "ALL ON" for a room.
+    - Verify all physical devices in that room respond.
+5.  **Polling**: Verify Python logs show `GET /` requests every 5 seconds.
