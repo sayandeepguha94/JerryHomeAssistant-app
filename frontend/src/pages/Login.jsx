@@ -1,3 +1,4 @@
+// CLEAN VERSION - RESET ADDED
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { LogIn, Loader2, Info } from "lucide-react";

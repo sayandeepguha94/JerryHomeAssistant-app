@@ -1,3 +1,4 @@
+// CLEAN VERSION - FALLBACK REMOVED
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { LogOut, Save, Server, User as UserIcon, Wifi, WifiOff } from "lucide-react";
@@ -145,9 +146,6 @@ export default function Settings() {
           className="w-full bg-transparent border-b border-white/20 focus:border-[#E05D26] outline-none py-2 text-base font-heading mb-6"
         />
 
-        {!isAdmin && (
-          <p className="text-xs text-white/30 mt-2">Only admin can modify.</p>
-        )}
         {isAdmin && (
           <div className="mt-4 flex gap-2 flex-wrap">
             <button
