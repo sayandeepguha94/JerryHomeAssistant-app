@@ -1,48 +1,51 @@
-# Implementation Plan: Direct Dual-Server Routing
+# Implementation Plan: Direct Admin Access (No Accounts)
 
-Refactor the frontend architecture to talk directly to two separate backend servers: a Python Hub for device controls and a Node Server for data persistence (Household runs, users).
+This plan removes the multi-user account system and configures the application to open directly into the Admin dashboard.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> **No More Proxying**: Device commands will now go directly from your browser to the Python Hub (`.112`).
+> **No More Security**: This change removes the login screen. Anyone who has the IP address of your server will have immediate access to control your home devices.
 >
-> **Endpoint Paths**:
-> - **Python Hub**: All requests will hit the root (`/`) as expected by `bridge.py`.
-> - **Node Server**: All requests will use the `/api` prefix (e.g., `/api/shopping-list`).
+> **Feature Removal**: The "Users" management page and all "Logout" functionality will be completely deleted from the UI.
 
 ## Proposed Changes
 
-### Frontend Core (`src/lib/api.js`)
+### Frontend Core (`src/lib/auth.jsx`)
 
-#### [MODIFY] [api.js](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/lib/api.js)
-- **Two Separate API Clients**:
-  - `pythonApi`: Targets the Python backend on port 8000. No `/api` prefix.
-  - `nodeApi` (aliased as `api`): Targets the Node backend on port 3000. Uses `/api` prefix.
-- **Removed Failover**: Delete the auto-failover logic between URLs.
+#### [MODIFY] [auth.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/lib/auth.jsx)
+- Hardcode the `admin` user as the default initial state.
+- Disable the `login` and `logout` functions as they are no longer needed.
 
-### Frontend Pages
+### Frontend Routing (`src/App.js`)
+
+#### [MODIFY] [App.js](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/App.js)
+- Delete the `/login` and `/users` routes.
+- Simplify the `Protected` component to act as a pass-through, since a user is always present.
+
+### Frontend UI (`src/components/` & `src/pages/`)
+
+#### [MODIFY] [BottomNav.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/components/BottomNav.jsx)
+- Remove the "Users" navigation item.
 
 #### [MODIFY] [Settings.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/pages/Settings.jsx)
-- **Renamed Fields**:
-  - "Dashboard Server (Python)" -> Targets the physical hardware hub.
-  - "Dashboard Server (Node)" -> Targets the data persistence server.
-- **Removed IoT Hub Field**: Consolidating into the two main server fields.
+- Remove the Profile Card (Name, Role) and the "Logout" button.
 
-#### [MODIFY] [Dashboard.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/pages/Dashboard.jsx)
-- Update to use `pythonApi`.
-- Change all `get("/devices")` to `get("/")`.
-- Change `post("/devices/control")` to `post("/")`.
+### Backend (`_original_node_ref/server.ts`)
 
-#### [MODIFY] [Shopping.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/pages/Shopping.jsx)
-- Ensure it continues to use the Node-based API for persistence.
+#### [MODIFY] [server.ts](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/_original_node_ref/server.ts)
+- Remove user persistence logic (`users.json`).
+- Keep the `devices` and `shopping` features as-is.
 
 ## Verification Plan
 
 ### Manual Verification
-1.  **Configure Settings**:
-    - Dashboard Server (Python): `http://192.168.29.112:8000`
-    - Dashboard Server (Node): `http://192.168.29.179:3000`
-2.  **Verify Device Control**: Toggle a light on the dashboard and verify the Python hub logs show a `POST /` request.
-3.  **Verify Status Polling**: Check Python hub logs for `GET /` requests every 4 seconds.
-4.  **Verify Shopping List**: Add an item to Household runs and verify the Node server logs show a `POST /api/shopping-list` request.
+1.  **Deploy**: `sudo docker compose up -d --build`.
+2.  **Initial Access**: Open `http://192.168.29.112:3000`.
+    - **Expected**: The Dashboard should open immediately without asking for a password.
+3.  **Navigation Check**:
+    - Verify that only "Home", "List", and "Setup" appear in the bottom bar.
+    - Verify that the "Users" page is gone.
+4.  **Settings Check**:
+    - Go to Settings.
+    - Verify the top profile section is gone and there is no way to log out.

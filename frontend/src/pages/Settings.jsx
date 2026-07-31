@@ -8,14 +8,14 @@ import { useAuth } from "../lib/auth";
 import { useNavigate } from "react-router-dom";
 
 export default function Settings() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const nav = useNavigate();
   const [pythonUrl, setPythonUrl] = useState(getServerUrl());
   const [nodeUrl, setNodeUrl] = useState(getFallbackUrl());
   const [saving, setSaving] = useState(false);
   const [pythonStatus, setPythonStatus] = useState(null);
   const [nodeStatus, setNodeStatus] = useState(null);
-  const isAdmin = user.role === "admin";
+  const isAdmin = true; // Always admin in this mode
 
   useEffect(() => {
     (async () => {
@@ -86,23 +86,6 @@ export default function Settings() {
         <h1 className="font-heading text-4xl font-bold">Configure.</h1>
       </motion.div>
 
-      <div className="glass rounded-3xl p-5 mb-5 flex items-center gap-4" data-testid="settings-profile-card">
-        <div className="w-12 h-12 rounded-2xl bg-[#E05D26] grid place-items-center">
-          <UserIcon className="w-6 h-6" />
-        </div>
-        <div className="flex-1">
-          <p className="font-heading text-lg font-semibold">{user.name}</p>
-          <p className="text-xs text-white/50 uppercase tracking-widest">{user.role}</p>
-        </div>
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-1.5 text-xs text-white/70 border border-white/10 px-3 py-2 rounded-full"
-          data-testid="settings-logout-btn"
-        >
-          <LogOut className="w-3.5 h-3.5" /> Logout
-        </button>
-      </div>
-
       <div className="glass rounded-3xl p-5 mb-5" data-testid="settings-server-card">
         <div className="flex items-center gap-2 mb-3">
           <Server className="w-4 h-4 text-[#B4F733]" />
@@ -158,9 +141,6 @@ export default function Settings() {
             </button>
             <button onClick={test} className="px-4 py-2.5 rounded-full border border-white/10 text-sm" data-testid="settings-test-btn">
               Test
-            </button>
-            <button onClick={changeServer} className="px-4 py-2.5 rounded-full border border-white/10 text-sm text-red-400/80" data-testid="settings-change-server-btn">
-              Switch
             </button>
           </div>
         )}

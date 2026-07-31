@@ -38,9 +38,8 @@ app.use(express.json());
 const PORT = 3000;
 
 // Persistence Paths
-const USERS_FILE = path.join(__dirname, "users.json");
-const SHOPPING_FILE = path.join(__dirname, "shopping_list.json");
 const STATE_FILE = path.join(__dirname, "device_state.json");
+const SHOPPING_FILE = path.join(__dirname, "shopping_list.json");
 const SUGGESTIONS_FILE = path.join(__dirname, "suggestions.json");
 const HUB_CONFIG_FILE = path.join(__dirname, "hub_config.json");
 
@@ -130,12 +129,11 @@ function saveHubConfig() {
 function saveState() {
   try { fs.writeFileSync(STATE_FILE, JSON.stringify(devices, null, 2)); } catch (err) {}
 }
-function saveUsers() {
-  try { fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2)); } catch (err) {}
-}
+
 function saveShopping() {
   try { fs.writeFileSync(SHOPPING_FILE, JSON.stringify(shoppingList, null, 2)); } catch (err) {}
 }
+
 function saveSuggestions() {
   try { fs.writeFileSync(SUGGESTIONS_FILE, JSON.stringify(suggestions, null, 2)); } catch (err) {}
 }
@@ -145,28 +143,6 @@ function loadAllState() {
     if (fs.existsSync(STATE_FILE)) {
       const data = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
       if (Array.isArray(data)) devices = data;
-    }
-    if (fs.existsSync(USERS_FILE)) {
-      const data = JSON.parse(fs.readFileSync(USERS_FILE, "utf8"));
-      if (Array.isArray(data)) {
-        users.length = 0;
-        users.push(...data);
-        console.log(`[State] Loaded ${users.length} users from disk.`);
-      }
-    }
-
-    // ROBUST ADMIN ENSURE: Always have a working admin regardless of disk state
-    const adminExists = users.some(u => u.username.toLowerCase() === "admin");
-    if (!adminExists) {
-      console.log("[State] Admin user not found, injecting default admin account.");
-      users.push({ id: "admin-1", name: "System Admin", username: "admin", password: "admin0466", role: "admin" });
-    } else {
-      // Ensure the default admin in the list HAS the correct password if it matches the ID
-      const defaultAdmin = users.find(u => u.id === "admin-1");
-      if (defaultAdmin && defaultAdmin.password !== "admin0466") {
-        console.log("[State] Resetting default admin password for security.");
-        defaultAdmin.password = "admin0466";
-      }
     }
 
     if (fs.existsSync(SHOPPING_FILE)) {
@@ -279,49 +255,7 @@ async function applyBackendControl(room: string, deviceKey: string | null, actio
 // API Endpoints
 app.get("/api/health", (req, res) => res.send("OK"));
 
-const handleLogin = (req: any, res: any) => {
-  const { username, password } = req.body;
-  if (!username || !password) return res.status(400).json({ error: "Missing username or password" });
-
-  const normalizedInput = username.trim().toLowerCase();
-  console.log(`[Auth] Login attempt: ${normalizedInput}`);
-
-  const user = users.find(u => u.username.toLowerCase() === normalizedInput && u.password === password);
-
-  if (!user) {
-    console.warn(`[Auth] Failed login for: ${normalizedInput}. Total users in memory: ${users.length}`);
-    return res.status(401).json({ error: "Invalid username or password" });
-  }
-
-  const token = `mock-token-${user.id}`;
-  const { password: _, ...safeUser } = user;
-  console.log(`[Auth] Login successful: ${safeUser.username} (${safeUser.role})`);
-  res.json({ success: true, token, user: safeUser });
-};
-
-app.post("/api/login", handleLogin);
-app.post("/api/auth/login", handleLogin);
-
-app.get("/api/auth/me", (req, res) => {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
-  const userId = auth.split(" ")[1].replace("mock-token-", "");
-  const user = users.find(u => u.id === userId);
-  if (!user) return res.status(401).json({ error: "Invalid session" });
-  const { password: _, ...safeUser } = user;
-  res.json(safeUser);
-});
-
-app.get("/api/users", (req, res) => res.json(users.map(({ password: _, ...u }) => u)));
-app.post("/api/users", (req, res) => {
-  const { username, password, name } = req.body;
-  if (users.find(u => u.username === username.toLowerCase())) return res.status(409).json({ error: "Exists" });
-  const newUser: User = { id: `u-${Date.now()}`, username: username.toLowerCase(), password, name, role: "user" };
-  users.push(newUser);
-  saveUsers();
-  res.json(newUser);
-});
-
+// Device Control
 app.get("/api/devices", (req, res) => res.json(devices));
 app.post("/api/devices/control", async (req, res) => {
   const { room, device, action, value } = req.body;

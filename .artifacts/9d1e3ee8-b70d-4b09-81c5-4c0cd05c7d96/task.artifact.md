@@ -1,8 +1,8 @@
-# Tasks: Robust Auth & Replicated Bridge
+# Tasks: Direct Admin Access
 
-- [x] Replicate full-feature `server.ts` (Users, Shopping)
-- [x] Fix teammate login (Integrated dual-server routing)
-- [x] Resolve frontend build errors (Cleaned up Settings.jsx)
-- [x] Add Login Page connection diagnostics
-- [x] Forcibly ensure Admin account on server startup
-- [/] Verify production build (Requires --no-cache)
+- [x] Hardcode Admin user in `auth.jsx`
+- [x] Remove Login & Users routes in `App.js`
+- [x] Remove Users icon from `BottomNav.jsx`
+- [x] Remove Profile & Logout from `Settings.jsx`
+- [x] Clean up User persistence in `server.ts`
+- [x] Verify instant access on rebuild

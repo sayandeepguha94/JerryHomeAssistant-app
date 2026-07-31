@@ -1,40 +1,31 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { api } from "./api";
+import React, { createContext, useContext, useState } from "react";
 
 const AuthCtx = createContext(null);
-const USER_KEY = "jerry_user";
+
+const ADMIN_USER = {
+  id: "admin-1",
+  name: "System Admin",
+  username: "admin",
+  role: "admin",
+  allowed_pages: ["dashboard", "shopping", "settings"],
+  allowed_devices: []
+};
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem(USER_KEY);
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [loading, setLoading] = useState(false);
+  // Always initialize as Admin
+  const [user] = useState(ADMIN_USER);
+  const [loading] = useState(false);
 
-  const login = async (username, password) => {
-    try {
-      // Use the configured 'api' instance for specialized dual-server routing
-      const res = await api.post("/login", { username, password });
-      if (res.data.success) {
-        setUser(res.data.user);
-        localStorage.setItem(USER_KEY, JSON.stringify(res.data.user));
-        return res.data.user;
-      }
-      throw new Error("Login failed");
-    } catch (err) {
-      throw err.response?.data?.error || err.message;
-    }
+  const login = async () => {
+    return ADMIN_USER;
   };
 
   const logout = () => {
-    setUser(null);
-    localStorage.removeItem(USER_KEY);
+    // No-op for direct access mode
   };
 
   const refresh = async () => {
-    // Basic refresh from storage
-    const saved = localStorage.getItem(USER_KEY);
-    if (saved) setUser(JSON.parse(saved));
+    // No-op
   };
 
   return (
@@ -47,9 +38,9 @@ export function AuthProvider({ children }) {
 export const useAuth = () => useContext(AuthCtx);
 
 export function hasPage(user, page) {
-  return true; // Everyone has access to everything now
+  return true; // Full access for Admin mode
 }
 
 export function canDevice(user, deviceId) {
-  return true; // Everyone can control everything now
+  return true; // Full control for Admin mode
 }
