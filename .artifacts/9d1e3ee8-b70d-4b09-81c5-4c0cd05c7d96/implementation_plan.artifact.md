@@ -1,42 +1,48 @@
-# Implementation Plan: Exact Replication of Frontend Server Trigger Mechanism
+# Implementation Plan: Direct Dual-Server Routing
 
-The goal is to update the Node server's `applyBackendControl` function to use the exact triggering logic and payload structure found in the working "frontend server" (`App.tsx`).
+Refactor the frontend architecture to talk directly to two separate backend servers: a Python Hub for device controls and a Node Server for data persistence (Household runs, users).
 
 ## User Review Required
 
 > [!IMPORTANT]
-> **Mechanism Change**: Instead of a separate bridge helper, I will inline the triggering logic into `applyBackendControl` to match the "frontend server" style exactly. This includes using the `timestamp` field and the same payload structure.
+> **No More Proxying**: Device commands will now go directly from your browser to the Python Hub (`.112`).
 >
-> **Endpoint Path**: I will continue using the **ROOT path (`/`)** of the Python Hub, as confirmed by your successful manual trigger logs.
+> **Endpoint Paths**:
+> - **Python Hub**: All requests will hit the root (`/`) as expected by `bridge.py`.
+> - **Node Server**: All requests will use the `/api` prefix (e.g., `/api/shopping-list`).
 
 ## Proposed Changes
 
-### Backend (`_original_node_ref/server.ts`)
+### Frontend Core (`src/lib/api.js`)
 
-#### [MODIFY] [server.ts](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/_original_node_ref/server.ts)
-- **Exact Payload Replication**:
-  ```typescript
-  const payload = {
-    deviceId: deviceKey ? `${room}.${deviceKey}` : null,
-    room,
-    device: deviceKey,
-    action,
-    value,
-    timestamp: new Date().toISOString()
-  };
-  ```
-- **Direct Dispatch**: Use `fetch(IOT_HUB_URL, { method: "POST", ... })` inside `applyBackendControl` immediately after the local state update, matching the sequential flow in `App.tsx`.
-- **Enhanced Logging**: Log the outgoing request and the Hub's response status to the Node terminal for visibility.
+#### [MODIFY] [api.js](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/lib/api.js)
+- **Two Separate API Clients**:
+  - `pythonApi`: Targets the Python backend on port 8000. No `/api` prefix.
+  - `nodeApi` (aliased as `api`): Targets the Node backend on port 3000. Uses `/api` prefix.
+- **Removed Failover**: Delete the auto-failover logic between URLs.
+
+### Frontend Pages
+
+#### [MODIFY] [Settings.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/pages/Settings.jsx)
+- **Renamed Fields**:
+  - "Dashboard Server (Python)" -> Targets the physical hardware hub.
+  - "Dashboard Server (Node)" -> Targets the data persistence server.
+- **Removed IoT Hub Field**: Consolidating into the two main server fields.
+
+#### [MODIFY] [Dashboard.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/pages/Dashboard.jsx)
+- Update to use `pythonApi`.
+- Change all `get("/devices")` to `get("/")`.
+- Change `post("/devices/control")` to `post("/")`.
+
+#### [MODIFY] [Shopping.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/pages/Shopping.jsx)
+- Ensure it continues to use the Node-based API for persistence.
 
 ## Verification Plan
 
 ### Manual Verification
-1.  **Deploy**: `sudo docker compose up -d --build`.
-2.  **Access Dashboard**: Access via `http://192.168.29.112:3000`.
-3.  **Settings**:
-    - **Dashboard Server**: `http://192.168.29.179:3000`.
-    - **IoT Hub**: `http://192.168.29.112:8000`.
-4.  **Individual Trigger**: Click a light button.
-    - Verify physical device response.
-    - Verify Node terminal shows `[Bridge] Trigger success`.
-5.  **Room Trigger**: Click "ALL ON" for a room and verify physical response.
+1.  **Configure Settings**:
+    - Dashboard Server (Python): `http://192.168.29.112:8000`
+    - Dashboard Server (Node): `http://192.168.29.179:3000`
+2.  **Verify Device Control**: Toggle a light on the dashboard and verify the Python hub logs show a `POST /` request.
+3.  **Verify Status Polling**: Check Python hub logs for `GET /` requests every 4 seconds.
+4.  **Verify Shopping List**: Add an item to Household runs and verify the Node server logs show a `POST /api/shopping-list` request.

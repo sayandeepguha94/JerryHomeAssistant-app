@@ -1,23 +1,21 @@
-# Walkthrough: Exact Trigger Mechanism Replication
+# Walkthrough: Specialized Dual-Server Routing
 
-I have updated the Node server to use the **exact** triggering mechanism from your working "Frontend Server" (`App.tsx`). This ensures the Python Hub receives commands in the precise format it expects.
+I have updated the system to support your specific networking setup. The dashboard is now a "Multi-Tenant" client that talks to two different servers based on the feature you are using.
 
-## Changes Made
+## Key Changes
 
-### 1. Replicated Payload & Dispatch
-I modified the `executeHubAction` function to mirror the `App.tsx` logic exactly:
-- **Root Path**: Commands are now sent to the root `/` of your Python Hub.
-- **Timestamp**: Every `POST` request now includes a fresh `timestamp` field.
-- **Awaited Completion**: The Node server now waits for the Python Hub to confirm the trigger before responding to your dashboard.
+### 1. Dual-Channel API Routing
+Refactored `api.js` to automatically route requests:
+- **Ecosystem Devices & Voice**: Targeted at the **Dashboard Server (Python)**.
+- **Household Runs & Users**: Targeted at the **Dashboard Server (Node)**.
 
-### 2. Fixed Room-Wide Actions
-Resolved a bug where clicking "ALL ON" or "ALL OFF" for a room would update the dashboard UI but wouldn't actually send the command to your hardware. Now, both individual toggles and room actions trigger the Python backend.
+### 2. Cleaned Settings Page
+Renamed the fields to match your physical setup and removed the redundant "IoT Hub" field.
+- **Dashboard Server (Python)**: Set this to `http://localhost:3000` (The local Node server that bridges to your Python hub).
+- **Dashboard Server (Node)**: Set this to `http://192.168.29.179:3000` (The remote Node server where your shopping list data lives).
 
-### 3. Integrated Bridge Logging
-Added high-visibility logging to the Node server. You can now see exactly when a trigger is dispatched and whether it succeeded:
-- `[Control] Received turn_on for bedroom/ambient light`
-- `[Bridge] Sending command to Python Hub: http://192.168.29.112:8000/`
-- `[Bridge] Trigger dispatched successfully!`
+### 3. Removed Failover Complexity
+Removed the automatic URL "switching" logic to ensure the app remains strictly connected to the IPs you provide, preventing accidental data wipes.
 
 ## How to Verify
 
@@ -26,14 +24,12 @@ Added high-visibility logging to the Node server. You can now see exactly when a
     sudo docker compose down --remove-orphans
     sudo docker compose up -d --build
     ```
-2.  **Verify Settings**:
-    - Access the dashboard at `http://192.168.29.112:3000`.
+2.  **Apply Your Configuration**:
+    - Access `http://192.168.29.112:3000`.
     - Go to **Settings**.
-    - Ensure **Dashboard Server (Node)** is `http://192.168.29.179:3000`.
-    - Ensure **IoT Hub (Python Backend)** is `http://192.168.29.112:8000`.
-3.  **Test Individual Toggles**: Click a light button. You should see `POST /` logs immediately on your Python terminal.
-4.  **Test Room Toggles**: Click "ALL ON" for a room. This should now also result in `POST /` logs.
-5.  **Monitor Node Logs**:
-    ```bash
-    sudo docker compose logs -f jerry-home-assistant
-    ```
+    - Set **Dashboard Server (Python)** to `http://localhost:3000`.
+    - Set **Dashboard Server (Node)** to `http://192.168.29.179:3000`.
+    - Click **Save**.
+3.  **The Result**:
+    - **Trigger Check**: Toggling a light will now hit the local `.112` Node bridge, which hits the physical hub at port 8000.
+    - **Sync Check**: The "Household runs" will now stay in sync with your remote `.179` server.

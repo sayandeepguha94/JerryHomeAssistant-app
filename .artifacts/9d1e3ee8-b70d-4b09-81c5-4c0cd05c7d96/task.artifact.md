@@ -1,8 +1,8 @@
-# Tasks: Exact Trigger Replication
+# Tasks: Dual-Server Specialization
 
-- [x] Use Turn 29 code as the base for `server.ts`
-- [x] Inject Hub configuration logic (`hub_config.json`)
-- [x] Re-implement `applyBackendControl` with the exact `App.tsx` logic
-- [x] Ensure `timestamp` is included in the payload
-- [x] Add background status polling to root `/`
-- [x] Verify triggers show up in Python logs as `POST /`
+- [x] Create separate axios storage for Python vs Node URLs
+- [x] Implement request interceptor with feature-based routing
+- [x] Rename Settings fields for Python vs Node servers
+- [x] Remove "IoT Hub" field from Settings UI
+- [x] Remove Failover/Switch logic from `api.js`
+- [x] Verify simultaneous trigger (local) and list sync (remote)

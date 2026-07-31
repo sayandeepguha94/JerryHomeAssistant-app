@@ -9,96 +9,61 @@ import { useNavigate } from "react-router-dom";
 export default function Settings() {
   const { user, logout } = useAuth();
   const nav = useNavigate();
-  const [serverUrl, setUrl] = useState(getServerUrl());
-  const [fallbackUrl, setFallback] = useState(getFallbackUrl());
-  const [hubUrl, setHubUrl] = useState("");
+  const [pythonUrl, setPythonUrl] = useState(getServerUrl());
+  const [nodeUrl, setNodeUrl] = useState(getFallbackUrl());
   const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState(null);
-  const [hubStatus, setHubStatus] = useState(null);
-  const [fallbackStatus, setFallbackStatus] = useState(null);
+  const [pythonStatus, setPythonStatus] = useState(null);
+  const [nodeStatus, setNodeStatus] = useState(null);
   const isAdmin = user.role === "admin";
 
   useEffect(() => {
     (async () => {
-      // Load current Hub config from Node server
-      try {
-        const res = await api.get("/hub-config");
-        if (res.data.url) setHubUrl(res.data.url);
-
-        const h = await api.get("/hub-health");
-        setHubStatus(h.data);
-      } catch (e) { console.error("Hub config load failed", e); }
-
-      const [s, fs] = await Promise.all([
-        pingServer(),
-        getFallbackUrl() ? pingServer(getFallbackUrl()) : Promise.resolve(null)
+      const [ps, ns] = await Promise.all([
+        pingServer(pythonUrl),
+        nodeUrl ? pingServer(nodeUrl) : Promise.resolve(null)
       ]);
-      setStatus(s);
-      setFallbackStatus(fs);
+      setPythonStatus(ps);
+      setNodeStatus(ns);
     })();
   }, []);
 
   const save = async () => {
-    let v = serverUrl.trim();
-    let f = fallbackUrl.trim();
-    let h = hubUrl.trim();
+    let p = pythonUrl.trim();
+    let n = nodeUrl.trim();
 
-    if (!v && !localStorage.getItem("jerry_server_url")) {
-      // Allow empty if we want to use current host, but warn if nothing at all
-    }
-
-    if (v && !v.startsWith("http://") && !v.startsWith("https://")) v = `http://${v}`;
-    if (f && !f.startsWith("http://") && !f.startsWith("https://")) f = `http://${f}`;
-    if (h && !h.startsWith("http://") && !h.startsWith("https://")) h = `http://${h}`;
+    if (p && !p.startsWith("http://") && !p.startsWith("https://")) p = `http://${p}`;
+    if (n && !n.startsWith("http://") && !n.startsWith("https://")) n = `http://${n}`;
 
     setSaving(true);
     try {
-      // 1. Save Hub Config to Node
-      if (h) {
-        await api.post("/hub-config", { url: h });
-        const hCheck = await api.get("/hub-health");
-        setHubStatus(hCheck.data);
-        if (hCheck.data.online) {
-          toast.success("IoT Hub address updated & reachable");
-        } else {
-          toast.error("IoT Hub saved but appears offline");
-        }
-      }
+      setServerUrl(p);
+      setFallbackUrl(n);
 
-      // 2. Save Node Server (Frontend Server)
-      setServerUrl(v);
-      setUrl(v);
-      setFallbackUrl(f);
-      setFallback(f);
-
-      const [s, fs] = await Promise.all([
-        pingServer(v),
-        f ? pingServer(f) : Promise.resolve(null)
+      const [ps, ns] = await Promise.all([
+        pingServer(p),
+        n ? pingServer(n) : Promise.resolve(null)
       ]);
 
-      setStatus(s);
-      setFallbackStatus(fs);
-
-      if (s.online) {
-        toast.success("Dashboard settings saved");
-      }
+      setPythonStatus(ps);
+      setNodeStatus(ns);
+      toast.success("Dual-server configuration saved");
     } catch (e) {
-      toast.error("Failed to save some settings");
+      toast.error("Failed to save settings");
     } finally {
       setSaving(false);
     }
   };
 
   const test = async () => {
-    setStatus(null);
-    setFallbackStatus(null);
-    const [s, fs] = await Promise.all([
-      pingServer(serverUrl),
-      fallbackUrl ? pingServer(fallbackUrl) : Promise.resolve(null)
+    setPythonStatus(null);
+    setNodeStatus(null);
+    const [ps, ns] = await Promise.all([
+      pingServer(pythonUrl),
+      nodeUrl ? pingServer(nodeUrl) : Promise.resolve(null)
     ]);
-    setStatus(s);
-    setFallbackStatus(fs);
-    toast[s.online ? "success" : "error"](s.online ? "Primary reachable" : "Primary unreachable");
+    setPythonStatus(ps);
+    setNodeStatus(ns);
+    toast[ps.online ? "success" : "error"](ps.online ? "Python server reachable" : "Python server unreachable");
   };
 
   const handleLogout = () => {
@@ -140,21 +105,21 @@ export default function Settings() {
       <div className="glass rounded-3xl p-5 mb-5" data-testid="settings-server-card">
         <div className="flex items-center gap-2 mb-3">
           <Server className="w-4 h-4 text-[#B4F733]" />
-          <h3 className="font-heading text-lg font-semibold text-[#B4F733]">IoT Hub (Python Backend)</h3>
-          {hubStatus && (
-            <span className={`ml-auto flex items-center gap-1 text-xs px-2 py-1 rounded-full ${hubStatus.online ? "text-[#B4F733]" : "text-red-400"}`}>
-              {hubStatus.online ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-              {hubStatus.online ? "Hub Online" : "Hub Offline"}
+          <h3 className="font-heading text-lg font-semibold text-[#B4F733]">Dashboard Server (Python)</h3>
+          {pythonStatus && (
+            <span className={`ml-auto flex items-center gap-1 text-xs px-2 py-1 rounded-full ${pythonStatus.online ? "text-[#B4F733]" : "text-red-400"}`}>
+              {pythonStatus.online ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+              {pythonStatus.online ? "Online" : "Offline"}
             </span>
           )}
         </div>
         <p className="text-xs text-white/50 mb-3">
-          The address of your Python hardware controller (triggers devices).
+          Target for <strong>Ecosystem Devices</strong>. Usually the local Node server acting as a bridge.
         </p>
         <input
-          value={hubUrl}
-          onChange={(e) => setHubUrl(e.target.value)}
-          placeholder="http://192.168.29.112:8000"
+          value={pythonUrl}
+          onChange={(e) => setPythonUrl(e.target.value)}
+          placeholder="http://localhost:3000"
           disabled={!isAdmin}
           className="w-full bg-transparent border-b border-white/20 focus:border-[#B4F733] outline-none py-2 text-base font-heading mb-8"
         />
@@ -162,21 +127,20 @@ export default function Settings() {
         <div className="flex items-center gap-2 mb-3">
           <Server className="w-4 h-4 text-[#E05D26]" />
           <h3 className="font-heading text-lg font-semibold">Dashboard Server (Node)</h3>
-          {status && (
-            <span className={`ml-auto flex items-center gap-1 text-xs px-2 py-1 rounded-full ${status.online ? "text-[#B4F733]" : "text-red-400"}`} data-testid="settings-status-badge">
-              {status.online ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-              {status.online ? "Online" : "Offline"}
+          {nodeStatus && (
+            <span className={`ml-auto flex items-center gap-1 text-xs px-2 py-1 rounded-full ${nodeStatus.online ? "text-[#B4F733]" : "text-red-400"}`}>
+              {nodeStatus.online ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+              {nodeStatus.online ? "Online" : "Offline"}
             </span>
           )}
         </div>
         <p className="text-xs text-white/50 mb-3">
-          The address of this frontend server. Leave <strong>EMPTY</strong> for best reliability.
+          Target for <strong>Household Runs & Users</strong>. Usually your remote server IP.
         </p>
         <input
-          data-testid="settings-server-url-input"
-          value={serverUrl}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder={window.location.origin}
+          value={nodeUrl}
+          onChange={(e) => setNodeUrl(e.target.value)}
+          placeholder="http://192.168.29.179:3000"
           disabled={!isAdmin}
           className="w-full bg-transparent border-b border-white/20 focus:border-[#E05D26] outline-none py-2 text-base font-heading mb-6"
         />
