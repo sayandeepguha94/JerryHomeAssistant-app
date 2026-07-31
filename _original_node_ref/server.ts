@@ -20,7 +20,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// 2. GLOBAL CORS
+// 2. GLOBAL CORS - MUST BE FIRST
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
@@ -28,7 +28,7 @@ app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Private-Network", "true");
 
   if (req.method === "OPTIONS") {
-    return res.sendStatus(204); // Using 204 to match what was seen earlier but ensuring headers are set
+    return res.sendStatus(204);
   }
   next();
 });
@@ -40,113 +40,6 @@ const PORT = 3000;
 // Health check
 app.get("/api/health", (req, res) => {
   res.send("OK");
-});
-
-const STATE_FILE = path.join(__dirname, "device_state.json");
-const SHOPPING_FILE = path.join(__dirname, "shopping_list.json");
-const HUB_CONFIG_FILE = path.join(__dirname, "hub_config.json");
-
-// IoT Hub Dynamic Configuration
-let IOT_HUB_URL = "http://192.168.29.112:8000/";
-
-// Helper to save hub config
-function saveHubConfig() {
-  try {
-    fs.writeFileSync(HUB_CONFIG_FILE, JSON.stringify({ url: IOT_HUB_URL }, null, 2));
-    console.log(`\x1b[32m[Config]\x1b[0m Saved Hub URL: ${IOT_HUB_URL}`);
-  } catch (err) {
-    console.error("[Config] Failed to save hub config:", err);
-  }
-}
-
-// Helper to save device state to disk
-function saveState() {
-  try {
-    fs.writeFileSync(STATE_FILE, JSON.stringify(devices, null, 2));
-  } catch (err) {
-    console.error("[State] Failed to save state:", err);
-  }
-}
-
-// Helper to load all state from disk
-function loadAllState() {
-  try {
-    if (fs.existsSync(STATE_FILE)) {
-      const data = fs.readFileSync(STATE_FILE, "utf8");
-      const loaded = JSON.parse(data);
-      if (Array.isArray(loaded)) {
-        devices = loaded;
-        console.log(`[State] Loaded ${devices.length} devices from disk.`);
-      }
-    }
-    if (fs.existsSync(SHOPPING_FILE)) {
-      const data = fs.readFileSync(SHOPPING_FILE, "utf8");
-      const loaded = JSON.parse(data);
-      if (Array.isArray(loaded)) {
-        shoppingList = loaded;
-        console.log(`[Shopping] Loaded ${shoppingList.length} items from disk.`);
-      }
-    }
-    if (fs.existsSync(HUB_CONFIG_FILE)) {
-      const data = fs.readFileSync(HUB_CONFIG_FILE, "utf8");
-      const config = JSON.parse(data);
-      if (config.url) {
-        IOT_HUB_URL = config.url.endsWith("/") ? config.url : `${config.url}/`;
-        console.log(`[Config] Loaded Hub URL from disk: ${IOT_HUB_URL}`);
-      }
-    } else {
-      // Default fallback if no config exists
-      IOT_HUB_URL = "http://192.168.29.112:8000/";
-    }
-  } catch (err) {
-    console.error("[State] Failed to load state:", err);
-  }
-}
-
-// Login Endpoint
-app.post("/api/login", (req, res) => {
-  const { username, password } = req.body;
-  if (username === "admin" && password === "admin0466") {
-    return res.json({
-      success: true,
-      user: {
-        id: "admin",
-        username: "admin",
-        name: "Administrator",
-        role: "admin",
-        allowed_pages: ["dashboard", "voice", "shopping", "settings"],
-        allowed_devices: []
-      }
-    });
-  }
-  return res.status(401).json({ error: "Invalid credentials" });
-});
-
-// Hub Config Endpoints
-app.get("/api/hub-config", (req, res) => {
-  res.json({ url: IOT_HUB_URL });
-});
-
-app.get("/api/hub-health", async (req, res) => {
-  try {
-    const data = await forwardToIoTHub("/", "GET", null);
-    res.json({ online: !!data });
-  } catch (e) {
-    res.json({ online: false });
-  }
-});
-
-app.post("/api/hub-config", (req, res) => {
-  const { url } = req.body;
-  if (!url) return res.status(400).json({ error: "URL is required" });
-
-  IOT_HUB_URL = url.endsWith("/") ? url : `${url}/`;
-  saveHubConfig();
-
-  // Trigger immediate sync
-  syncDevicesWithHardware();
-
-  res.json({ success: true, url: IOT_HUB_URL });
 });
 
 // Centralized Ecosystem Devices State
@@ -192,6 +85,27 @@ let devices: Device[] = [
   { id: "bedroom 2.high ambient light", name: "High Ambient Light", room: "bedroom 2", deviceKey: "high ambient light", entityId: "switch.bedroom_2_4node_smart_switch_3_high_ambient_light", category: "lighting", on: false, statusText: "Off" }
 ];
 
+// Centralized User State
+interface User {
+  id: string;
+  name: string;
+  username: string;
+  password?: string;
+  role: "admin" | "user";
+  allowed_pages?: string[];
+  allowed_devices?: string[];
+}
+
+const users: User[] = [
+  {
+    id: "admin-1",
+    name: "System Admin",
+    username: "admin",
+    password: "admin0466",
+    role: "admin"
+  }
+];
+
 // Centralized Shopping List State
 interface ShoppingItem {
   id: string;
@@ -208,101 +122,135 @@ let shoppingList: ShoppingItem[] = [
   { id: "5", text: "Dark Roast Coffee Beans", completed: true, createdAt: Date.now() - 3600000 * 1 },
 ];
 
-// Helper to forward commands to the actual IoT Hub
-async function forwardToIoTHub(path: string, method: string, payload: any) {
+let suggestions: string[] = [
+  "potato / আলু", "tomato / টমেটো", "onion / পেঁয়াজ", "milk / দুধ", "Ginger / আদা",
+  "garlic / রসুন", "Green vegies / সবুজ সবজি", "Chicken / মুরগির মাংস", "Katla Fish / কাতলা মাছ",
+  "Lote fish / লোটে মাছ", "Chingri Fish / চিংড়ি মাছ", "Hilsa Fish / ইলিশ মাছ", "Masala / মশলা",
+  "Egg / ডিম", "Capcicum / ক্যাপসিকাম", "Beans / বিনস", "Carrot / গাজর", "Rice / চাল",
+  "Protine Atta / প্রোটিন আটা"
+];
+
+// Persistence Paths
+const USERS_FILE = path.join(__dirname, "users.json");
+const SHOPPING_FILE = path.join(__dirname, "shopping_list.json");
+const STATE_FILE = path.join(__dirname, "device_state.json");
+const SUGGESTIONS_FILE = path.join(__dirname, "suggestions.json");
+const HUB_CONFIG_FILE = path.join(__dirname, "hub_config.json");
+
+// IoT Hub Dynamic Configuration
+let IOT_HUB_URL = "http://192.168.29.112:8000/";
+
+// Helper to save hub config
+function saveHubConfig() {
   try {
-    // REPLICATION: Use root path for Python hub
-    const url = new URL(path.startsWith("/") ? path.slice(1) : path, IOT_HUB_URL).toString();
-    console.log(`\x1b[35m[Bridge]\x1b[0m ${method} -> ${url}`);
+    fs.writeFileSync(HUB_CONFIG_FILE, JSON.stringify({ url: IOT_HUB_URL }, null, 2));
+    console.log(`\x1b[32m[Config]\x1b[0m Hub URL persisted: ${IOT_HUB_URL}`);
+  } catch (err) {
+    console.error("[Config] Failed to save hub config:", err);
+  }
+}
 
+// Persistence Helpers
+function saveState() {
+  try { fs.writeFileSync(STATE_FILE, JSON.stringify(devices, null, 2)); } catch (err) {}
+}
+
+function saveUsers() {
+  try { fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2)); } catch (err) {}
+}
+
+function saveShopping() {
+  try { fs.writeFileSync(SHOPPING_FILE, JSON.stringify(shoppingList, null, 2)); } catch (err) {}
+}
+
+function saveSuggestions() {
+  try { fs.writeFileSync(SUGGESTIONS_FILE, JSON.stringify(suggestions, null, 2)); } catch (err) {}
+}
+
+function loadAllState() {
+  try {
+    if (fs.existsSync(STATE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+      if (Array.isArray(data)) devices = data;
+    }
+    if (fs.existsSync(USERS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(USERS_FILE, "utf8"));
+      if (Array.isArray(data)) {
+        users.length = 0;
+        users.push(...data);
+      }
+    }
+    if (fs.existsSync(SHOPPING_FILE)) {
+      const data = JSON.parse(fs.readFileSync(SHOPPING_FILE, "utf8"));
+      if (Array.isArray(data)) shoppingList = data;
+    }
+    if (fs.existsSync(SUGGESTIONS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(SUGGESTIONS_FILE, "utf8"));
+      if (Array.isArray(data)) suggestions = data;
+    }
+    if (fs.existsSync(HUB_CONFIG_FILE)) {
+      const config = JSON.parse(fs.readFileSync(HUB_CONFIG_FILE, "utf8"));
+      if (config.url) IOT_HUB_URL = config.url.endsWith("/") ? config.url : `${config.url}/`;
+    }
+    console.log(`[State] Loaded all persisted data.`);
+  } catch (err) { console.error("[State] Loading failed:", err); }
+}
+
+// IoT Bridge Forwarder
+async function forwardToIoTHub(method: string, payload: any) {
+  try {
+    console.log(`\x1b[35m[Bridge]\x1b[0m ${method} -> ${IOT_HUB_URL}`);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    const response = await fetch(url, {
+    const response = await fetch(IOT_HUB_URL, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: payload ? JSON.stringify({
-        ...payload,
-        timestamp: new Date().toISOString()
-      }) : undefined,
+      body: payload ? JSON.stringify({ ...payload, timestamp: new Date().toISOString() }) : undefined,
       signal: controller.signal
     });
 
     clearTimeout(timeoutId);
-
-    if (response.ok) {
-      const data = await response.json();
-      console.log(`\x1b[35m[Bridge]\x1b[0m Success from Hub`);
-      return data;
-    } else {
-      console.error(`\x1b[31m[Bridge] Hub error: ${response.status} ${response.statusText}\x1b[0m`);
-      return null;
-    }
+    if (response.ok) return await response.json();
+    console.error(`\x1b[31m[Bridge] Hub error: ${response.status}\x1b[0m`);
+    return null;
   } catch (err: any) {
-    if (err.name === 'AbortError') {
-      console.error(`\x1b[31m[Bridge] Hub request timed out\x1b[0m`);
-    } else {
-      console.error(`\x1b[31m[Bridge] Connection failed:\x1b[0m`, err.message);
-    }
+    console.error(`\x1b[31m[Bridge] Connection failed:\x1b[0m`, err.message);
     return null;
   }
 }
 
-// Helper to sync device states from the actual hardware hub
+// Background Sync Loop
 async function syncDevicesWithHardware() {
   try {
-    // Python backend responds at the root / with GET
-    const data = await forwardToIoTHub("/", "GET", null);
-    if (!data) return;
-
-    // Data expected to have 'states' or be a direct map of rooms
-    const remoteStates = data.states || data.devices || data;
-    let updatedCount = 0;
-
-    devices.forEach(dev => {
-      const roomName = dev.room.toLowerCase();
-      const deviceKey = dev.deviceKey?.toLowerCase();
-
-      if (deviceKey && remoteStates[roomName] && remoteStates[roomName][deviceKey] !== undefined) {
-        const rawState = remoteStates[roomName][deviceKey];
-        if (rawState !== null) {
-          const stateStr = String(rawState).toLowerCase();
-
-          if (stateStr === "on" || stateStr === "true" || stateStr === "1") {
-            dev.on = true;
-            dev.statusText = dev.category === "fan" && dev.value ? `Speed ${dev.value}` : "On";
-          } else if (stateStr === "off" || stateStr === "false" || stateStr === "0") {
-            dev.on = false;
-            dev.statusText = "Off";
-          } else {
-            dev.statusText = String(rawState);
-            if (!isNaN(Number(rawState))) {
-              const speedNum = Number(rawState);
-              dev.value = speedNum;
-              dev.on = speedNum > 0;
-            }
+    const data = await forwardToIoTHub("GET", null);
+    if (data && data.states) {
+      const remoteStates = data.states;
+      let updated = false;
+      devices.forEach(dev => {
+        const roomName = dev.room.toLowerCase();
+        const deviceKey = dev.deviceKey.toLowerCase();
+        if (remoteStates[roomName] && remoteStates[roomName][deviceKey] !== undefined) {
+          const raw = remoteStates[roomName][deviceKey];
+          const isOn = (String(raw).toLowerCase() === "on" || String(raw) === "1" || String(raw) === "true");
+          if (dev.on !== isOn) {
+            dev.on = isOn;
+            dev.statusText = isOn ? (dev.category === "fan" && dev.value ? `Speed ${dev.value}` : "On") : "Off";
+            updated = true;
           }
-          updatedCount++;
         }
-      }
-    });
-
-    if (updatedCount > 0) {
-      saveState();
+      });
+      if (updated) saveState();
     }
-  } catch (err: any) {
-    // Silent fail for background sync
-  }
+  } catch (err) {}
 }
 
-// Helper to update device state
+// Hub Control Helper
 async function applyBackendControl(room: string, deviceKey: string | null, action: string, value?: number) {
   const normalizedRoom = room.toLowerCase();
   const normalizedKey = deviceKey?.toLowerCase() || "";
 
-  console.log(`[State] Updating ${room} / ${deviceKey} -> ${action} (value: ${value})`);
-
-  // 1. UPDATE LOCAL IN-MEMORY STATE IMMEDIATELY (Optimistic)
+  // 1. Update Memory
   if (action === "room_on" || action === "room_off") {
     devices.forEach(dev => {
       if (dev.room.toLowerCase() === normalizedRoom) {
@@ -313,582 +261,119 @@ async function applyBackendControl(room: string, deviceKey: string | null, actio
   } else {
     const dev = devices.find(d => d.room.toLowerCase() === normalizedRoom && d.deviceKey.toLowerCase() === normalizedKey);
     if (dev) {
-      if (action === "turn_on") {
-        dev.on = true;
-        dev.statusText = dev.category === "fan" && dev.value ? `Speed ${dev.value}` : "On";
-      } else if (action === "turn_off") {
-        dev.on = false;
-        dev.statusText = "Off";
-      } else if (action === "set_fan_speed" && value !== undefined) {
-        dev.on = true;
-        dev.value = value;
-        dev.statusText = `Speed ${value}`;
-      }
-      console.log(`[State] Device found and updated: ${dev.id}`);
-    } else {
-      console.warn(`[State] Device NOT found: ${room} / ${deviceKey}`);
+      if (action === "turn_on") { dev.on = true; dev.statusText = dev.category === "fan" && dev.value ? `Speed ${dev.value}` : "On"; }
+      else if (action === "turn_off") { dev.on = false; dev.statusText = "Off"; }
+      else if (action === "set_fan_speed" && value !== undefined) { dev.on = true; dev.value = value; dev.statusText = `Speed ${value}`; }
     }
   }
-
   saveState();
 
-  // 2. FORWARD TO PHYSICAL IOT HUB (Async, don't block state update)
-  const payload = {
-    deviceId: deviceKey ? `${room}.${deviceKey}` : null,
-    room,
-    device: deviceKey,
-    action,
-    value,
-    timestamp: new Date().toISOString()
-  };
-
-  // REPLICATION: Use root path for triggers
-  forwardToIoTHub("/", "POST", payload).catch(err => {
-    console.error(`\x1b[31m[Bridge] Trigger failed:\x1b[0m ${err.message}`);
-  });
+  // 2. Forward to Python Hub (bridge.py expects deviceId, action, value at root /)
+  const payload = { deviceId: deviceKey ? `${room}.${deviceKey}` : null, room, device: deviceKey, action, value };
+  forwardToIoTHub("POST", payload);
 }
 
+// AUTH Endpoints (Supporting both existing UI and reference repo)
+const handleLogin = (req: any, res: any) => {
+  const { username, password } = req.body;
+  const user = users.find(u => u.username === username && u.password === password);
+  if (!user) return res.status(401).json({ error: "Invalid username or password" });
+  const token = `mock-token-${user.id}`;
+  const { password: _, ...safeUser } = user;
+  res.json({ success: true, token, user: safeUser });
+};
 
-// Lazy initialization of Gemini client to prevent crash on startup if key is missing
+app.post("/api/login", handleLogin);
+app.post("/api/auth/login", handleLogin);
+
+app.get("/api/auth/me", (req, res) => {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
+  const userId = auth.split(" ")[1].replace("mock-token-", "");
+  const user = users.find(u => u.id === userId);
+  if (!user) return res.status(401).json({ error: "Invalid session" });
+  const { password: _, ...safeUser } = user;
+  res.json(safeUser);
+});
+
+// User Management
+app.get("/api/users", (req, res) => res.json(users.map(({ password: _, ...u }) => u)));
+app.post("/api/users", (req, res) => {
+  const { username, password, name } = req.body;
+  if (users.find(u => u.username === username.toLowerCase())) return res.status(409).json({ error: "Exists" });
+  const newUser: User = { id: `u-${Date.now()}`, username: username.toLowerCase(), password, name, role: "user" };
+  users.push(newUser);
+  saveUsers();
+  res.json(newUser);
+});
+
+// Device Control
+app.get("/api/devices", (req, res) => res.json(devices));
+app.post("/api/devices/control", async (req, res) => {
+  const { room, device, action, value } = req.body;
+  await applyBackendControl(room, device, action, value);
+  res.json({ success: true });
+});
+
+// Hub Management
+app.get("/api/hub-config", (req, res) => res.json({ url: IOT_HUB_URL }));
+app.get("/api/hub-health", async (req, res) => {
+  const data = await forwardToIoTHub("GET", null);
+  res.json({ online: !!data });
+});
+app.post("/api/hub-config", (req, res) => {
+  IOT_HUB_URL = req.body.url.endsWith("/") ? req.body.url : `${req.body.url}/`;
+  saveHubConfig();
+  res.json({ success: true });
+});
+
+// Shopping List
+app.get("/api/shopping-list", (req, res) => res.json(shoppingList));
+app.post("/api/shopping-list", (req, res) => {
+  shoppingList = req.body.items;
+  saveShopping();
+  res.json({ success: true });
+});
+app.post("/api/shopping-list/add", (req, res) => {
+  const newItem = { id: `${Date.now()}`, text: req.body.text, completed: false, createdAt: Date.now() };
+  shoppingList.unshift(newItem);
+  saveShopping();
+  res.json({ success: true, item: newItem, items: shoppingList });
+});
+app.get("/api/shopping-suggestions", (req, res) => res.json(suggestions));
+
+// Command Proxy
+app.post("/api/parse-command", async (req, res) => {
+  const result = await forwardToIoTHub("POST", { query: req.body.text });
+  if (result) res.json(result);
+  else res.status(502).json({ error: "Hub unreachable" });
+});
+
+// Lazy Gemini
 let aiClient: GoogleGenAI | null = null;
 function getGeminiClient(): GoogleGenAI {
-  if (!aiClient) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY environment variable is not set. Please add it in Settings > Secrets.");
-    }
-    aiClient = new GoogleGenAI({
-      apiKey: apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
-    });
-  }
+  if (!aiClient) aiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
   return aiClient;
 }
 
-// Multer setup for handling audio uploads from ESP32 clients
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 15 * 1024 * 1024 // 15MB max file size
-  }
-});
-
-// Cache for generated speech audio files to serve to the ESP32 (prevent memory crashes from large base64 strings)
-const audioCache = new Map<string, { buffer: Buffer; mimeType: string }>();
-let nextAudioId = 1;
-
-function cacheAudioFile(buffer: Buffer, mimeType: string): string {
-  const id = `voice_${Date.now()}_${nextAudioId++}`;
-  audioCache.set(id, { buffer, mimeType });
-  // Evict old entries if the cache grows too large
-  if (audioCache.size > 100) {
-    const oldestKey = audioCache.keys().next().value;
-    if (oldestKey) audioCache.delete(oldestKey);
-  }
-  return id;
-}
-
-// Helper to convert raw 16-bit Mono PCM to playable standard RIFF WAV format
-function pcmToWav(pcmBuffer: Buffer, sampleRate: number = 24000): Buffer {
-  const wavHeader = Buffer.alloc(44);
-  const totalDataLen = pcmBuffer.length;
-  const totalFileLen = totalDataLen + 36;
-  
-  // "RIFF" chunk descriptor
-  wavHeader.write("RIFF", 0);
-  wavHeader.writeUInt32LE(totalFileLen, 4);
-  wavHeader.write("WAVE", 8);
-  
-  // "fmt " sub-chunk
-  wavHeader.write("fmt ", 12);
-  wavHeader.writeUInt32LE(16, 16); // Subchunk1Size
-  wavHeader.writeUInt16LE(1, 20);  // AudioFormat (1 = uncompressed PCM)
-  wavHeader.writeUInt16LE(1, 22);  // NumChannels (1 = Mono)
-  wavHeader.writeUInt32LE(sampleRate, 24); // SampleRate
-  wavHeader.writeUInt32LE(sampleRate * 2, 28); // ByteRate (SampleRate * 1 channel * 2 bytes/sample)
-  wavHeader.writeUInt16LE(2, 32);  // BlockAlign
-  wavHeader.writeUInt16LE(16, 34); // BitsPerSample (16-bit)
-  
-  // "data" sub-chunk
-  wavHeader.write("data", 36);
-  wavHeader.writeUInt32LE(totalDataLen, 40);
-  
-  return Buffer.concat([wavHeader, pcmBuffer]);
-}
-
-// Simple rule-based command parser as an ultra-reliable local fallback (no LLM / no AI processing)
-function parseCommandRuleBased(text: string) {
-  const normalized = text.toLowerCase();
-  const commands: any[] = [];
-  let response = "Fallback processed.";
-
-  // Check if command is for shopping list
-  if (normalized.includes("shopping") || normalized.includes("grocery") || normalized.includes("buy")) {
-    if (normalized.includes("add") || normalized.includes("buy") || normalized.includes("put")) {
-      let rawItem = normalized;
-      rawItem = rawItem.replace(/^(hey jerry|jerry|please|can you)?\s*(add|put|buy)\s*/i, "");
-      rawItem = rawItem.replace(/\s*(to|on)\s*(the|my)?\s*(shopping|grocery)?\s*list.*$/i, "");
-      rawItem = rawItem.replace(/^(to|on)\s*(the|my)?\s*(shopping|grocery)?\s*list\s*/i, "");
-      rawItem = rawItem.trim();
-
-      if (rawItem) {
-        const formattedItem = rawItem.charAt(0).toUpperCase() + rawItem.slice(1);
-        const newItem: ShoppingItem = {
-          id: Date.now().toString() + Math.random().toString(36).substring(2, 5),
-          text: formattedItem,
-          completed: false,
-          createdAt: Date.now()
-        };
-        shoppingList = [newItem, ...shoppingList];
-        response = `Added "${newItem.text}" to your shopping list.`;
-        commands.push({ type: "shopping_add", item: newItem });
-        return { response, commands };
-      }
-    }
-  }
-
-  // Rooms
-  const rooms = ["living room", "dine-in", "bedroom", "bedroom 2"];
-  let matchedRoom = "";
-  for (const r of rooms) {
-    if (normalized.includes(r)) {
-      matchedRoom = r;
-      break;
-    }
-  }
-
-  // If no specific room is matched, default to "living room" if we find matching devices, or try to infer.
-  if (!matchedRoom) {
-    if (normalized.includes("party") || normalized.includes("passage")) {
-      matchedRoom = "living room";
-    } else if (normalized.includes("dine") || normalized.includes("low spot")) {
-      matchedRoom = "dine-in";
-    } else if (normalized.includes("bedside")) {
-      matchedRoom = "bedroom";
-    } else if (normalized.includes("low ambient") || normalized.includes("high ambient")) {
-      matchedRoom = "bedroom 2";
-    } else {
-      matchedRoom = "living room"; // default
-    }
-  }
-
-  // Action
-  let action = "turn_on";
-  if (normalized.includes("off") || normalized.includes("stop") || normalized.includes("disable") || normalized.includes("shut")) {
-    action = "turn_off";
-  }
-
-  // Check if it is a full room operation
-  if (normalized.includes("room on") || (normalized.includes("all") && (normalized.includes("on") || normalized.includes("start")))) {
-    action = "room_on";
-    commands.push({ room: matchedRoom, device: null, action: "room_on" });
-    response = `Turning on all devices in the ${matchedRoom}.`;
-    return { response, commands };
-  } else if (normalized.includes("room off") || (normalized.includes("all") && (normalized.includes("off") || normalized.includes("stop")))) {
-    action = "room_off";
-    commands.push({ room: matchedRoom, device: null, action: "room_off" });
-    response = `Turning off all devices in the ${matchedRoom}.`;
-    return { response, commands };
-  }
-
-  // Check fan speed
-  if (normalized.includes("fan") && (normalized.includes("speed") || normalized.includes("set") || normalized.includes("level") || normalized.includes("to"))) {
-    const numMatch = normalized.match(/(\d+)/);
-    if (numMatch) {
-      const speed = parseInt(numMatch[1], 10);
-      commands.push({ room: matchedRoom, device: "fan", action: "set_fan_speed", value: speed });
-      response = `Setting the ${matchedRoom} fan speed to ${speed}.`;
-      return { response, commands };
-    }
-  }
-
-  // Detect specific device
-  let matchedDevice = "ambient light"; // default fallback
-  if (normalized.includes("party")) {
-    matchedDevice = "party light";
-  } else if (normalized.includes("passage")) {
-    matchedDevice = "passage light";
-  } else if (normalized.includes("spot")) {
-    if (matchedRoom === "dine-in" && normalized.includes("low")) {
-      matchedDevice = "low spot light";
-    } else {
-      matchedDevice = "spot light";
-    }
-  } else if (normalized.includes("bedside")) {
-    matchedDevice = "bedside light";
-  } else if (normalized.includes("fan")) {
-    matchedDevice = "fan";
-  } else if (normalized.includes("low ambient")) {
-    matchedDevice = "low ambient light";
-  } else if (normalized.includes("high ambient")) {
-    matchedDevice = "high ambient light";
-  } else if (normalized.includes("ambient")) {
-    matchedDevice = "ambient light";
-  }
-
-  commands.push({
-    room: matchedRoom,
-    device: matchedDevice,
-    action: action,
-  });
-
-  response = `${action === "turn_on" ? "Turning on" : "Turning off"} the ${matchedDevice} in the ${matchedRoom}.`;
-  return { response, commands };
-}
-
-// GET /api/devices - Fetch current state of all devices
-app.get("/api/devices", (req, res) => {
-  res.json(devices);
-});
-
-// POST /api/devices/control - Update state of a single device manually
-app.post("/api/devices/control", async (req, res) => {
-  const { room, device, action, value } = req.body;
-  if (!room || !action) {
-    return res.status(400).json({ error: "Missing room or action" });
-  }
-  await applyBackendControl(room, device, action, value);
-  const updatedDev = devices.find(d => d.room.toLowerCase() === room.toLowerCase() && (!device || d.deviceKey.toLowerCase() === device.toLowerCase()));
-  res.json({ success: true, device: updatedDev || null });
-});
-
-// POST /api/devices/sync-all - Replace all device states with synchronized array from target
-app.post("/api/devices/sync-all", (req, res) => {
-  const { devices: newDevices } = req.body;
-  if (Array.isArray(newDevices) && newDevices.length > 0) {
-    devices = newDevices;
-    return res.json({ success: true, count: devices.length });
-  }
-  return res.status(400).json({ error: "Invalid devices payload" });
-});
-
-// GET /api/shopping-list - Fetch current shopping list from central server
-app.get("/api/shopping-list", (req, res) => {
-  res.json(shoppingList);
-});
-
-// POST /api/shopping-list - Sync full shopping list state
-app.post("/api/shopping-list", (req, res) => {
-  const { items } = req.body;
-  if (Array.isArray(items)) {
-    shoppingList = items;
-    saveShopping();
-    return res.json({ success: true, count: shoppingList.length, items: shoppingList });
-  }
-  return res.status(400).json({ error: "Invalid items payload" });
-});
-
-// POST /api/shopping-list/add - Add single item
-app.post("/api/shopping-list/add", (req, res) => {
-  const { text } = req.body;
-  if (!text || typeof text !== "string") {
-    return res.status(400).json({ error: "Missing item text" });
-  }
-  const newItem: ShoppingItem = {
-    id: Date.now().toString() + Math.random().toString(36).substring(2, 5),
-    text: text.trim(),
-    completed: false,
-    createdAt: Date.now()
-  };
-  shoppingList = [newItem, ...shoppingList];
-  saveShopping();
-  return res.json({ success: true, item: newItem, items: shoppingList });
-});
-
-// GET /termux-client.js - Dynamically compiled & pre-configured console client downloader
-app.get("/termux-client.js", (req, res) => {
-  const filePath = path.join(process.cwd(), "termux-client.js");
-  if (fs.existsSync(filePath)) {
-    let content = fs.readFileSync(filePath, "utf8");
-    // Dynamically calculate and inject current server base URL
-    const isHttps = req.headers["x-forwarded-proto"] === "https";
-    const host = `${isHttps ? "https" : "http"}://${req.headers["host"]}`;
-    content = content.replace(/let SERVER_URL = '[^']*';/, `let SERVER_URL = '${host}';`);
-    res.setHeader("Content-Type", "application/javascript");
-    return res.send(content);
-  }
-  res.status(404).send("Client script not found.");
-});
-
-// API Route: Parse Commands Locally (non-AI local-only rule engine)
-app.post("/api/parse-command", async (req, res) => {
-  const { text } = req.body;
-  if (!text || typeof text !== "string") {
-    return res.status(400).json({ error: "Missing text command" });
-  }
-
-  const result = parseCommandRuleBased(text);
-  // Persist command results to central in-memory state
-  for (const cmd of result.commands) {
-    await applyBackendControl(cmd.room, cmd.device, cmd.action, cmd.value);
-  }
-
-  return res.json({
-    ...result,
-    source: "local-non-ai-rule-engine"
-  });
-});
-
-// API Route: Parse Audio Wave/PCM uploaded from ESP32 clients (STT + Command Parser + TTS pipeline)
-app.post("/api/parse-audio", upload.single("audio"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No audio file uploaded" });
-    }
-
-    console.log(`[Audio] Received file of size ${req.file.size} bytes. MIME type: ${req.file.mimetype}`);
-
-    let transcript = "";
-    const hasApiKey = !!process.env.GEMINI_API_KEY;
-
-    if (hasApiKey) {
-      try {
-        const ai = getGeminiClient();
-        console.log("[Audio] Transcribing audio with Gemini 3.5-flash...");
-        
-        // Construct inline base64 audio part
-        const audioPart = {
-          inlineData: {
-            mimeType: req.file.mimetype || "audio/wav",
-            data: req.file.buffer.toString("base64")
-          }
-        };
-
-        const transcriptionResponse = await ai.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: [
-            audioPart,
-            "You are a Speech-to-Text transcription service for a local smart home assistant named Jerry. Transcribe this audio command exactly. Return only the spoken text and nothing else. No punctuation, no comments. If the audio is silent or unintelligible, respond with an empty string."
-          ]
-        });
-
-        transcript = transcriptionResponse.text?.trim() || "";
-        console.log(`[Audio] Transcribed text: "${transcript}"`);
-      } catch (err: any) {
-        console.error("[Audio] Transcribing failed, falling back to local simulation command", err.message);
-        transcript = "turn on ambient light"; // Safe fallback
-      }
-    } else {
-      console.warn("[Audio] GEMINI_API_KEY is missing. Using default simulation command...");
-      transcript = "turn on ambient light";
-    }
-
-    if (!transcript) {
-      return res.json({
-        transcript: "",
-        response: "I didn't quite catch that. Could you please try speaking again?",
-        commands: [],
-        audioUrl: null,
-        error: hasApiKey ? undefined : "GEMINI_API_KEY is missing. Defaulted to mock command."
-      });
-    }
-
-    // 2. Parse command to trigger IoT devices
-    const result = parseCommandRuleBased(transcript);
-    // Persist parsed commands to in-memory state
-    for (const cmd of result.commands) {
-      await applyBackendControl(cmd.room, cmd.device, cmd.action, cmd.value);
-    }
-
-    // 3. Generate voice response TTS (if API key is present)
-    let audioUrl: string | null = null;
-    let audioBase64: string | null = null;
-
-    if (hasApiKey) {
-      try {
-        const ai = getGeminiClient();
-        console.log(`[TTS] Generating voice for response: "${result.response}"`);
-        
-        const ttsResponse = await ai.models.generateContent({
-          model: "gemini-3.1-flash-tts-preview",
-          contents: [{ parts: [{ text: result.response }] }],
-          config: {
-            responseModalities: ["AUDIO"],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: "Kore" }, // Warm & responsive assistant voice
-              },
-            },
-          },
-        });
-
-        const base64Pcm = ttsResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (base64Pcm) {
-          const rawPcm = Buffer.from(base64Pcm, "base64");
-          // Pack PCM into WAV
-          const wavBuffer = pcmToWav(rawPcm, 24000);
-          
-          // Cache the wav file for subsequent binary streaming
-          const cachedId = cacheAudioFile(wavBuffer, "audio/wav");
-          audioUrl = `/api/audio/${cachedId}.wav`;
-          audioBase64 = wavBuffer.toString("base64");
-        }
-      } catch (err: any) {
-        console.error("[TTS] Failed to generate speech", err.message);
-      }
-    }
-
-    return res.json({
-      transcript,
-      response: result.response,
-      commands: result.commands,
-      audioUrl,
-      audioBase64,
-      source: hasApiKey ? "gemini-ai-transcription-and-tts" : "fallback-static-mode",
-      warning: hasApiKey ? undefined : "Set your GEMINI_API_KEY in the Secrets panel for fully functional Voice AI transcription!"
-    });
-
-  } catch (error: any) {
-    console.error("[Audio API] Major error:", error);
-    return res.status(500).json({ error: "Internal Server Error", message: error.message });
-  }
-});
-
-// API Route: On-demand Text-To-Speech generation (JSON input)
-app.post("/api/tts", async (req, res) => {
-  try {
-    const { text } = req.body;
-    if (!text) {
-      return res.status(400).json({ error: "Missing 'text' field in JSON request" });
-    }
-
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(400).json({ 
-        error: "GEMINI_API_KEY is not set. Go to Settings > Secrets in AI Studio to configure it." 
-      });
-    }
-
-    const ai = getGeminiClient();
-    console.log(`[TTS] Generating voice for on-demand text: "${text}"`);
-    
-    const ttsResponse = await ai.models.generateContent({
-      model: "gemini-3.1-flash-tts-preview",
-      contents: [{ parts: [{ text: text }] }],
-      config: {
-        responseModalities: ["AUDIO"],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: "Kore" },
-          },
-        },
-      },
-    });
-
-    const base64Pcm = ttsResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!base64Pcm) {
-      return res.status(500).json({ error: "Failed to generate TTS audio data" });
-    }
-
-    const rawPcm = Buffer.from(base64Pcm, "base64");
-    const wavBuffer = pcmToWav(rawPcm, 24000);
-    const cachedId = cacheAudioFile(wavBuffer, "audio/wav");
-
-    return res.json({
-      response: text,
-      audioUrl: `/api/audio/${cachedId}.wav`,
-      audioBase64: wavBuffer.toString("base64")
-    });
-
-  } catch (error: any) {
-    console.error("[TTS API] Error:", error.message);
-    return res.status(500).json({ error: "Internal Server Error", message: error.message });
-  }
-});
-
-// API Route: Binary streaming endpoint for cached voice responses (critical for lightweight ESP32 low-RAM audio playback)
-app.get("/api/audio/:id", (req, res) => {
-  const rawId = req.params.id;
-  // Strip file extension if any (e.g. voice_123.wav -> voice_123)
-  const id = rawId.replace(/\.[^/.]+$/, "");
-  
-  const cached = audioCache.get(id);
-  if (!cached) {
-    return res.status(404).send("Audio file not found or expired.");
-  }
-
-  res.setHeader("Content-Type", cached.mimeType);
-  res.setHeader("Content-Length", cached.buffer.length);
-  res.setHeader("Accept-Ranges", "bytes");
-  return res.end(cached.buffer);
-});
-
-// API Route: Local HTTP Proxy
-// This allows the browser to bypass CORS and HTTPS mixed content blockers when running the dashboard locally in a Linux environment.
-// The browser hits /api/proxy with the target url and payload, and this node server issues the fetch locally.
-app.post("/api/proxy", async (req, res) => {
-  const { url, method, headers, body } = req.body;
-  if (!url) {
-    return res.status(400).json({ error: "Missing proxy URL" });
-  }
-
-  try {
-    console.log(`[Proxy] Forwarding request to: ${url} (Method: ${method || "GET"})`);
-    const response = await fetch(url, {
-      method: method || "GET",
-      headers: headers || { "Content-Type": "application/json" },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-
-    const isJson = response.headers.get("content-type")?.includes("application/json");
-    const data = isJson ? await response.json() : await response.text();
-
-    return res.status(response.status).json({
-      status: response.status,
-      statusText: response.statusText,
-      data,
-    });
-  } catch (error: any) {
-    console.error(`[Proxy] Error forwarding request to ${url}:`, error.message);
-    return res.status(502).json({
-      error: "Bad Gateway",
-      message: `Failed to connect to local IP server: ${error.message}`,
-      suggestion: "If you are running in the cloud, this server cannot access private IPs like 192.168.29.112. Run this dashboard locally in your local Linux container, or use our bridge guide!",
-    });
-  }
-});
-
-// Setup Vite or static serving
+// Server Startup
 async function startServer() {
   loadAllState();
-
-  // Start background sync with physical hardware (Devices only)
-  syncDevicesWithHardware();
   setInterval(syncDevicesWithHardware, 5000);
 
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: {
-        middlewareMode: true,
-        cors: true
-      },
-      appType: "spa",
-    });
+    const vite = await createViteServer({ server: { middlewareMode: true, cors: true }, appType: "spa" });
     app.use(vite.middlewares);
   } else {
-    // In production, the compiled server.cjs is located inside the 'dist' folder
-    // along with the built frontend files.
     const distPath = path.resolve(__dirname);
-    console.log(`\x1b[34m[Server]\x1b[0m Production mode: serving from ${distPath}`);
-
     app.use(express.static(distPath, { index: false }));
-
     app.get("*", (req, res) => {
       const indexPath = path.join(distPath, "index.html");
-      if (fs.existsSync(indexPath)) {
-        res.sendFile(indexPath);
-      } else {
-        res.status(404).send("Frontend assets not found in " + distPath);
-      }
+      if (fs.existsSync(indexPath)) res.sendFile(indexPath);
+      else res.status(404).send("Build missing");
     });
   }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Server] running on http://0.0.0.0:${PORT}`);
-  });
+  app.listen(PORT, "0.0.0.0", () => console.log(`[Server] Running on port ${PORT}`));
 }
 
 startServer();

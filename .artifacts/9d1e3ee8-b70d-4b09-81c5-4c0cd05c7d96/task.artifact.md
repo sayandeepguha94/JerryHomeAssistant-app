@@ -1,9 +1,9 @@
-# Tasks: Unified Node-Python Bridge
+# Tasks: Full-Feature Replicated Bridge
 
-- [ ] Implement Shopping List persistence (JSON) in `server.ts`
-- [ ] Implement `forwardToPythonHub` helper in `server.ts`
-- [ ] Update `applyBackendControl` to use the bridge
-- [ ] Update `/api/parse-command` to proxy queries to Python
-- [ ] Implement background status polling loop
-- [ ] Simplify `api.js` for strict Node server communication
-- [ ] Verify triggers and sync across dual servers
+- [ ] Overwrite `server.ts` with provided full-feature base
+- [ ] Add IoT Hub Bridge components (Forwarder & Syncer)
+- [ ] Implement `hub_config.json` for Python backend IP persistence
+- [ ] Update `applyBackendControl` to trigger physical devices
+- [ ] Update Command Parsers to proxy to Python Assistant
+- [ ] Ensure `device_state.json` persistence matches full-feature devices
+- [ ] Verify triggers and sync simultaneously
