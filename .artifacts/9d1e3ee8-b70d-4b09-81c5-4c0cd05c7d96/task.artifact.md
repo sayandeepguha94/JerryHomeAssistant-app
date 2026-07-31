@@ -1,6 +1,9 @@
-# Tasks: Reliable Dual-Server Communication
+# Tasks: Unified Node-Python Bridge
 
-- [x] Fix syntax error in `server.ts` (Removed extra brace)
-- [x] Fix sync and forwarding logic for Shopping List
-- [x] Fix `Settings.jsx` imports and UI field
-- [x] Verify simultaneous trigger and sync
+- [ ] Implement Shopping List persistence (JSON) in `server.ts`
+- [ ] Implement `forwardToPythonHub` helper in `server.ts`
+- [ ] Update `applyBackendControl` to use the bridge
+- [ ] Update `/api/parse-command` to proxy queries to Python
+- [ ] Implement background status polling loop
+- [ ] Simplify `api.js` for strict Node server communication
+- [ ] Verify triggers and sync across dual servers

@@ -129,16 +129,7 @@ app.get("/api/hub-config", (req, res) => {
 
 app.get("/api/hub-health", async (req, res) => {
   try {
-    const data = await forwardToIoTHub("/api/devices", "GET", null);
-    res.json({ online: !!data });
-  } catch (e) {
-    res.json({ online: false });
-  }
-});
-
-app.get("/api/hub-health", async (req, res) => {
-  try {
-    const data = await forwardToIoTHub("/api/devices", "GET", null);
+    const data = await forwardToIoTHub("/", "GET", null);
     res.json({ online: !!data });
   } catch (e) {
     res.json({ online: false });
@@ -220,6 +211,7 @@ let shoppingList: ShoppingItem[] = [
 // Helper to forward commands to the actual IoT Hub
 async function forwardToIoTHub(path: string, method: string, payload: any) {
   try {
+    // REPLICATION: Use root path for Python hub
     const url = new URL(path.startsWith("/") ? path.slice(1) : path, IOT_HUB_URL).toString();
     console.log(`\x1b[35m[Bridge]\x1b[0m ${method} -> ${url}`);
 
@@ -259,8 +251,8 @@ async function forwardToIoTHub(path: string, method: string, payload: any) {
 // Helper to sync device states from the actual hardware hub
 async function syncDevicesWithHardware() {
   try {
-    // RESTORE: Use correct Python Hub status endpoint
-    const data = await forwardToIoTHub("/api/devices", "GET", null);
+    // Python backend responds at the root / with GET
+    const data = await forwardToIoTHub("/", "GET", null);
     if (!data) return;
 
     // Data expected to have 'states' or be a direct map of rooms
@@ -350,8 +342,8 @@ async function applyBackendControl(room: string, deviceKey: string | null, actio
     timestamp: new Date().toISOString()
   };
 
-  // RESTORE: Use correct Python Hub endpoint
-  forwardToIoTHub("/api/devices/control", "POST", payload).catch(err => {
+  // REPLICATION: Use root path for triggers
+  forwardToIoTHub("/", "POST", payload).catch(err => {
     console.error(`\x1b[31m[Bridge] Trigger failed:\x1b[0m ${err.message}`);
   });
 }
