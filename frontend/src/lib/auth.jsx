@@ -1,46 +1,46 @@
 import React, { createContext, useContext, useState } from "react";
+import { api } from "./api";
 
 const AuthCtx = createContext(null);
 
-const ADMIN_USER = {
-  id: "admin-1",
-  name: "System Admin",
-  username: "admin",
-  role: "admin",
-  allowed_pages: ["dashboard", "shopping", "settings"],
-  allowed_devices: []
-};
-
 export function AuthProvider({ children }) {
-  // Always initialize as Admin
-  const [user] = useState(ADMIN_USER);
-  const [loading] = useState(false);
+  // Store tokens for different modes
+  const [tokens, setTokens] = useState({
+    home: localStorage.getItem("jerry_home_token"),
+    list: localStorage.getItem("jerry_list_token"),
+    admin: localStorage.getItem("jerry_admin_token")
+  });
 
-  const login = async () => {
-    return ADMIN_USER;
+  const validateGateway = async (mode, password) => {
+    try {
+      const res = await api.post("/auth/verify", { mode, password });
+      if (res.data.success) {
+        const { token } = res.data;
+        localStorage.setItem(`jerry_${mode}_token`, token);
+        setTokens(prev => ({ ...prev, [mode]: token }));
+        return true;
+      }
+      return false;
+    } catch (err) {
+      throw err.response?.data?.error || "Validation failed";
+    }
   };
 
   const logout = () => {
-    // No-op for direct access mode
+    localStorage.removeItem("jerry_home_token");
+    localStorage.removeItem("jerry_list_token");
+    localStorage.removeItem("jerry_admin_token");
+    setTokens({ home: null, list: null, admin: null });
   };
 
-  const refresh = async () => {
-    // No-op
-  };
+  // Mock user object for existing code compatibility
+  const user = tokens.admin ? { role: "admin", name: "System Admin" } : null;
 
   return (
-    <AuthCtx.Provider value={{ user, loading, login, logout, refresh }}>
+    <AuthCtx.Provider value={{ tokens, validateGateway, logout, user }}>
       {children}
     </AuthCtx.Provider>
   );
 }
 
 export const useAuth = () => useContext(AuthCtx);
-
-export function hasPage(user, page) {
-  return true; // Full access for Admin mode
-}
-
-export function canDevice(user, deviceId) {
-  return true; // Full control for Admin mode
-}

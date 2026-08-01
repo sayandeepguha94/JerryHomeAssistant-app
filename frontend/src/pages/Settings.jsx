@@ -1,7 +1,6 @@
-// CLEAN VERSION - FALLBACK REMOVED
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { LogOut, Save, Server, User as UserIcon, Wifi, WifiOff } from "lucide-react";
+import { LogOut, Save, Server, Shield, Key, Wifi, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { getServerUrl, setServerUrl, clearServerUrl, pingServer, getFallbackUrl, setFallbackUrl, api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -28,16 +27,35 @@ function UrlRow({ label, url }) {
   );
 }
 
+function PasswordInput({ label, value, onChange }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-[10px] uppercase tracking-widest text-white/30">{label}</p>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#E05D26] transition-colors"
+      />
+    </div>
+  );
+}
+
 export default function Settings() {
-  const { user } = useAuth();
+  const { tokens, logout } = useAuth();
   const nav = useNavigate();
   const [pythonUrl, setPythonUrl] = useState(getServerUrl());
   const [nodeUrl, setNodeUrl] = useState(getFallbackUrl());
   const [saving, setSaving] = useState(false);
   const [pythonStatus, setPythonStatus] = useState(null);
   const [nodeStatus, setNodeStatus] = useState(null);
+
+  // Gateway Passwords
+  const [gateways, setGateways] = useState({ home: "", list: "", admin: "" });
+
   const { pathname } = useLocation();
   const isAdminPath = pathname.startsWith("/admin");
+  const isAdminAuthed = !!tokens.admin;
 
   useEffect(() => {
     (async () => {
@@ -47,8 +65,16 @@ export default function Settings() {
       ]);
       setPythonStatus(ps);
       setNodeStatus(ns);
+
+      // Fetch passwords if admin
+      if (isAdminAuthed) {
+        try {
+          const res = await api.get("/admin/passwords");
+          setGateways(res.data);
+        } catch (e) { console.error("Failed to fetch passwords", e); }
+      }
     })();
-  }, []);
+  }, [isAdminAuthed]);
 
   const save = async () => {
     let p = pythonUrl.trim();
@@ -62,6 +88,11 @@ export default function Settings() {
       setServerUrl(p);
       setFallbackUrl(n);
 
+      // Save passwords if admin
+      if (isAdminAuthed) {
+        await api.post("/admin/passwords", gateways);
+      }
+
       const [ps, ns] = await Promise.all([
         pingServer(p),
         n ? pingServer(n) : Promise.resolve(null)
@@ -69,7 +100,7 @@ export default function Settings() {
 
       setPythonStatus(ps);
       setNodeStatus(ns);
-      toast.success("Dual-server configuration saved");
+      toast.success("Settings saved");
     } catch (e) {
       toast.error("Failed to save settings");
     } finally {
@@ -77,23 +108,26 @@ export default function Settings() {
     }
   };
 
-  const test = async () => {
-    setPythonStatus(null);
-    setNodeStatus(null);
-    const [ps, ns] = await Promise.all([
-      pingServer(pythonUrl),
-      nodeUrl ? pingServer(nodeUrl) : Promise.resolve(null)
-    ]);
-    setPythonStatus(ps);
-    setNodeStatus(ns);
-    toast[ps.online ? "success" : "error"](ps.online ? "Python server reachable" : "Python server unreachable");
+  const handleLogout = () => {
+    logout();
+    nav("/", { replace: true });
   };
 
   return (
-    <div className="min-h-screen pb-32 px-5 pt-10 max-w-2xl mx-auto">
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-        <p className="text-xs uppercase tracking-[0.3em] text-white/40">Settings</p>
-        <h1 className="font-heading text-4xl font-bold">Configure.</h1>
+    <div className="min-h-screen pb-40 px-5 pt-10 max-w-2xl mx-auto">
+      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex items-start justify-between mb-8">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-white/40">Settings</p>
+          <h1 className="font-heading text-4xl font-bold">Configure.</h1>
+        </div>
+        {isAdminAuthed && (
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 text-xs text-red-400 border border-red-400/20 px-4 py-2.5 rounded-full hover:bg-red-400/5 transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" /> Logout
+          </button>
+        )}
       </motion.div>
 
       {isAdminPath && (
@@ -103,12 +137,41 @@ export default function Settings() {
             <h3 className="font-heading text-lg font-semibold text-[#E05D26]">Access URLs</h3>
           </div>
           <p className="text-xs text-white/50 mb-4">
-            Share these URLs to provide specific access to your system.
+            Direct paths for specific access levels.
           </p>
           <div className="space-y-4">
             <UrlRow label="Public Home" url="/home" />
             <UrlRow label="Public List" url="/list" />
             <UrlRow label="Admin Gateway" url="/admin" />
+          </div>
+        </div>
+      )}
+
+      {isAdminAuthed && (
+        <div className="glass rounded-3xl p-5 mb-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Shield className="w-4 h-4 text-[#B4F733]" />
+            <h3 className="font-heading text-lg font-semibold text-[#B4F733]">Security & Passwords</h3>
+          </div>
+          <p className="text-xs text-white/50 mb-4">
+            Update passwords for the three access modes.
+          </p>
+          <div className="space-y-4">
+            <PasswordInput
+              label="Home Password"
+              value={gateways.home}
+              onChange={(v) => setGateways({...gateways, home: v})}
+            />
+            <PasswordInput
+              label="List Password"
+              value={gateways.list}
+              onChange={(v) => setGateways({...gateways, list: v})}
+            />
+            <PasswordInput
+              label="Admin Password"
+              value={gateways.admin}
+              onChange={(v) => setGateways({...gateways, admin: v})}
+            />
           </div>
         </div>
       )}
@@ -125,13 +188,12 @@ export default function Settings() {
           )}
         </div>
         <p className="text-xs text-white/50 mb-3">
-          Target for <strong>Ecosystem Devices</strong>. Usually the local Node server acting as a bridge.
+          Bridge for <strong>Ecosystem Devices</strong>.
         </p>
         <input
           value={pythonUrl}
           onChange={(e) => setPythonUrl(e.target.value)}
           placeholder="http://localhost:3000"
-          disabled={!isAdminPath}
           className="w-full bg-transparent border-b border-white/20 focus:border-[#B4F733] outline-none py-2 text-base font-heading mb-8"
         />
 
@@ -146,37 +208,43 @@ export default function Settings() {
           )}
         </div>
         <p className="text-xs text-white/50 mb-3">
-          Target for <strong>Household Runs & Users</strong>. Usually your remote server IP.
+          Persistence for <strong>Household Runs</strong>.
         </p>
         <input
           value={nodeUrl}
           onChange={(e) => setNodeUrl(e.target.value)}
           placeholder="http://192.168.29.179:3000"
-          disabled={!isAdminPath}
           className="w-full bg-transparent border-b border-white/20 focus:border-[#E05D26] outline-none py-2 text-base font-heading mb-6"
         />
 
-        {isAdminPath && (
-          <div className="mt-4 flex gap-2 flex-wrap">
-            <button
-              onClick={save}
-              disabled={saving}
-              className="flex-1 min-w-[120px] flex items-center justify-center gap-2 py-2.5 rounded-full bg-[#E05D26] font-semibold disabled:opacity-50"
-              data-testid="settings-save-btn"
-            >
-              <Save className="w-4 h-4" /> {saving ? "Saving…" : "Save"}
-            </button>
-            <button onClick={test} className="px-4 py-2.5 rounded-full border border-white/10 text-sm" data-testid="settings-test-btn">
-              Test
-            </button>
-          </div>
-        )}
+        <div className="mt-4 flex gap-2 flex-wrap">
+          <button
+            onClick={save}
+            disabled={saving}
+            className="flex-1 min-w-[120px] flex items-center justify-center gap-2 py-2.5 rounded-full bg-[#E05D26] font-semibold disabled:opacity-50"
+            data-testid="settings-save-btn"
+          >
+            <Save className="w-4 h-4" /> {saving ? "Saving…" : "Save"}
+          </button>
+          <button onClick={() => { setPythonStatus(null); setNodeStatus(null); save(); }} className="px-4 py-2.5 rounded-full border border-white/10 text-sm">
+            Test
+          </button>
+        </div>
       </div>
 
-      <div className="glass rounded-3xl p-5 text-xs text-white/50 leading-relaxed" data-testid="settings-about-card">
+      <div className="glass rounded-3xl p-5 mt-5 text-xs text-white/50 leading-relaxed" data-testid="settings-about-card">
         <p className="font-semibold text-white/80 mb-1 font-heading">About Jerry</p>
-        <p>Local Android app for the light_client_voice_assistant Node.js server. All device controls, voice commands and shopping list sync directly with your local server over Wi-Fi.</p>
+        <p>Direct Gateway access with mode-specific security. Configuration applies to the current device session.</p>
       </div>
+
+      {!tokens.admin && !tokens.home && !tokens.list && (
+        <button
+          onClick={() => nav("/")}
+          className="w-full py-4 mt-4 rounded-2xl border border-white/10 text-white/40 font-heading text-sm hover:bg-white/5 transition-colors"
+        >
+          Return to Portal
+        </button>
+      )}
     </div>
   );
 }

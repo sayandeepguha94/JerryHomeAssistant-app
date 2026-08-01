@@ -1,7 +1,10 @@
-# Tasks: URL-Based Access Control
+# Tasks: Gateway Portal & Mode Passwords
 
-- [x] Define new route structure in `App.js` (/home, /list, /admin)
-- [x] Restrict `BottomNav.jsx` to only appear on `/admin` routes
-- [x] Add "Access URLs" panel to `Settings.jsx`
-- [x] Verify redirection from `/` to `/admin` (Default Mode)
-- [x] Finalize production build
+- [x] Implement Gateway password persistence in `server.ts`
+- [x] Add `/api/auth/verify` and password management endpoints to `server.ts`
+- [x] Implement `validateGateway` and session storage in `auth.jsx`
+- [x] Create `Portal.jsx` landing page with selection and password prompt
+- [x] Configure routes in `App.js` to use the new Portal and Mode protection
+- [x] Add "Security & Passwords" management to `Settings.jsx`
+- [x] Remove obsolete `Login.jsx` and `Users.jsx`
+- [x] Verify production build

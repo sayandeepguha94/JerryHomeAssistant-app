@@ -40,8 +40,22 @@ const PORT = 3000;
 // Persistence Paths
 const STATE_FILE = path.join(__dirname, "device_state.json");
 const SHOPPING_FILE = path.join(__dirname, "shopping_list.json");
+const PASSWORDS_FILE = path.join(__dirname, "passwords.json");
 const SUGGESTIONS_FILE = path.join(__dirname, "suggestions.json");
 const HUB_CONFIG_FILE = path.join(__dirname, "hub_config.json");
+
+// Gateway State
+interface Passwords {
+  home: string;
+  list: string;
+  admin: string;
+}
+
+let passwords: Passwords = {
+  home: "home0466",
+  list: "list0466",
+  admin: "admin0466"
+};
 
 // Centralized Ecosystem Devices State
 interface Device {
@@ -123,19 +137,19 @@ let suggestions: string[] = [
 let IOT_HUB_URL = "http://192.168.29.112:8000/";
 
 // Persistence Helpers
-function saveHubConfig() {
-  try { fs.writeFileSync(HUB_CONFIG_FILE, JSON.stringify({ url: IOT_HUB_URL }, null, 2)); } catch (err) {}
-}
-function saveState() {
-  try { fs.writeFileSync(STATE_FILE, JSON.stringify(devices, null, 2)); } catch (err) {}
-}
+function saveHubConfig() { saveAll(); }
+function saveState() { saveAll(); }
+function saveShopping() { saveAll(); }
+function saveSuggestions() { saveAll(); }
 
-function saveShopping() {
-  try { fs.writeFileSync(SHOPPING_FILE, JSON.stringify(shoppingList, null, 2)); } catch (err) {}
-}
-
-function saveSuggestions() {
-  try { fs.writeFileSync(SUGGESTIONS_FILE, JSON.stringify(suggestions, null, 2)); } catch (err) {}
+function saveAll() {
+  try {
+    fs.writeFileSync(STATE_FILE, JSON.stringify(devices, null, 2));
+    fs.writeFileSync(SHOPPING_FILE, JSON.stringify(shoppingList, null, 2));
+    fs.writeFileSync(PASSWORDS_FILE, JSON.stringify(passwords, null, 2));
+    fs.writeFileSync(SUGGESTIONS_FILE, JSON.stringify(suggestions, null, 2));
+    fs.writeFileSync(HUB_CONFIG_FILE, JSON.stringify({ url: IOT_HUB_URL }, null, 2));
+  } catch (err) {}
 }
 
 function loadAllState() {
@@ -148,6 +162,9 @@ function loadAllState() {
     if (fs.existsSync(SHOPPING_FILE)) {
       const data = JSON.parse(fs.readFileSync(SHOPPING_FILE, "utf8"));
       if (Array.isArray(data)) shoppingList = data;
+    }
+    if (fs.existsSync(PASSWORDS_FILE)) {
+      passwords = JSON.parse(fs.readFileSync(PASSWORDS_FILE, "utf8"));
     }
     if (fs.existsSync(SUGGESTIONS_FILE)) {
       const data = JSON.parse(fs.readFileSync(SUGGESTIONS_FILE, "utf8"));
@@ -254,6 +271,34 @@ async function applyBackendControl(room: string, deviceKey: string | null, actio
 
 // API Endpoints
 app.get("/api/health", (req, res) => res.send("OK"));
+
+// AUTH Gateway: Verify passwords for home, list, or admin
+app.post("/api/auth/verify", (req, res) => {
+  const { mode, password } = req.body;
+  if (!mode || !password) return res.status(400).json({ error: "Mode and password required" });
+
+  const validPassword = (passwords as any)[mode];
+  if (password === validPassword) {
+    const token = jwt.sign({ mode }, JWT_SECRET, { expiresIn: "30d" });
+    return res.json({ success: true, token });
+  }
+  res.status(401).json({ error: "Invalid password" });
+});
+
+// Admin: Manage gateway passwords
+app.get("/api/admin/passwords", (req, res) => {
+  // Authentication check for admin token would go here
+  res.json(passwords);
+});
+
+app.post("/api/admin/passwords", (req, res) => {
+  const { home, list, admin } = req.body;
+  if (home) passwords.home = home;
+  if (list) passwords.list = list;
+  if (admin) passwords.admin = admin;
+  saveAll();
+  res.json({ success: true, passwords });
+});
 
 // Device Control
 app.get("/api/devices", (req, res) => res.json(devices));

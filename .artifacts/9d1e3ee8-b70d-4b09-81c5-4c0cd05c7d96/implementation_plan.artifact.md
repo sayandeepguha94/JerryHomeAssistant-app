@@ -1,61 +1,60 @@
-# Implementation Plan: URL-Based Access Control
+# Implementation Plan: Gateway Portal & Mode Passwords
 
-Restructure the application into three primary access URLs: `/home`, `/list`, and `/admin`, with varying visibility of features and navigation.
+This plan introduces a central entry portal at the root URL and protects the specialized access channels (/home, /list, /admin) with configurable passwords.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> **Access URLs**:
-> - `/home`: Grants access strictly to the home devices dashboard.
-> - `/list`: Grants access strictly to the household shopping list.
-> - `/admin`: Master access to all features (Home, List, Setup).
+> **New Passwords**:
+> - **Public Home**: `home0466`
+> - **Public List**: `list0466`
+> - **Admin Gateway**: `admin0466`
 >
-> **Navigation**:
-> - In `/home` and `/list` modes, the bottom navigation will only show the single relevant icon.
-> - In `/admin` mode, the full navigation bar will be visible.
+> **Access Model**: Visiting the root URL (`/`) will now show a selection screen instead of redirecting straight to the dashboard.
 
 ## Proposed Changes
+
+### Backend (`_original_node_ref/server.ts`)
+
+#### [MODIFY] [server.ts](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/_original_node_ref/server.ts)
+- **New State**: Add `gateways` object to store and persist passwords for the three modes.
+- **Persistence**: Save/Load `passwords.json`.
+- **API Endpoints**:
+  - `POST /api/auth/verify`: Verifies a password for a specific mode and returns a session token.
+  - `GET /api/admin/passwords`: Returns current passwords (requires admin token).
+  - `POST /api/admin/passwords`: Updates passwords (requires admin token).
 
 ### Frontend Core (`src/lib/auth.jsx`)
 
 #### [MODIFY] [auth.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/lib/auth.jsx)
-- No major changes needed since we are operating in "no user" mode with a hardcoded admin.
+- **Multi-Session Support**: Update to store 3 distinct session tokens in `localStorage` (`jerry_home_token`, `jerry_list_token`, `jerry_admin_token`).
+- **Validation**: Add `validateGateway(mode, password)` logic.
 
 ### Frontend Routing (`src/App.js`)
 
 #### [MODIFY] [App.js](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/App.js)
-- Update routes to handle the new URL structure:
-  - `/home` -> Dashboard
-  - `/list` -> Shopping
-  - `/admin` -> Dashboard (Admin mode)
-  - `/admin/shopping` -> Shopping (Admin mode)
-  - `/admin/settings` -> Settings (Admin mode)
-  - `/admin/server-setup` -> ServerSetup (Admin mode)
-- Add a default redirect from `/` to `/home`.
+- **Portal Page**: Add a new route at `/` for the entry selection screen.
+- **Route Protection**: Update the `Protected` component to check for the specific token required by the current path.
 
-### Frontend Components
+### Frontend UI
 
-#### [MODIFY] [BottomNav.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/components/BottomNav.jsx)
-- Update to detect the current mode from the URL.
-- Filter visible navigation items based on the mode:
-  - `home` mode -> Show only Dashboard icon (or hide nav if preferred).
-  - `list` mode -> Show only Shopping icon.
-  - `admin` mode -> Show all icons.
+#### [NEW] [Portal.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/pages/Portal.jsx)
+- A clean, immersive landing page with three primary actions: "Home Dashboard", "Household List", and "Admin Gateway".
+- Integrated password prompt for each action.
 
 #### [MODIFY] [Settings.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/pages/Settings.jsx)
-- Add a "Quick Links" section that only appears when in `admin` mode.
-- List the other access URLs (`/home`, `/list`, `/admin`) for easy copy-pasting.
+- Add a **"Security & Passwords"** section (only in `/admin`) to change the 3 gateway passwords.
 
 ## Verification Plan
 
 ### Manual Verification
-1.  **Visit `/home`**:
-    - Verify Dashboard is visible.
-    - Verify Bottom Nav shows only the "Home" icon (or no nav).
-2.  **Visit `/list`**:
-    - Verify Shopping List is visible.
-    - Verify Bottom Nav shows only the "List" icon.
-3.  **Visit `/admin`**:
-    - Verify Dashboard is visible.
-    - Verify full Bottom Nav is visible.
-    - Navigate to Settings and verify "Quick Links" are shown.
+1.  **Initial Visit**: Open `http://192.168.29.112:3000`.
+    - Verify you see the Portal with 3 choices.
+2.  **Home Test**: Click "Home Dashboard", enter `home0466`.
+    - Verify redirection to `/home`.
+3.  **Admin Test**: Visit `/admin` directly.
+    - Verify it asks for a password.
+    - Enter `admin0466` and verify full access.
+4.  **Config Test**: Go to Settings in Admin mode.
+    - Change the "Public Home" password.
+    - Verify the new password works at `/home`.

@@ -1,40 +1,46 @@
-# Walkthrough: URL-Based Access Model & Admin Default
+# Walkthrough: Gateway Portal & Mode-Based Security
 
-I have restructured the application into three specialized access channels: **Home**, **List**, and **Admin Gateway**, and configured the system to land on the **Admin Gateway** by default.
+I have transformed the application into a secure gateway portal that allows you to choose between three specialized access modes, each protected by its own password.
 
-## Key Access Channels
+## Key Features
 
-### 1. Admin Gateway (`/admin`) - [DEFAULT]
-- **URL**: `http://192.168.29.112:3000/admin` (or simply `http://192.168.29.112:3000/`)
-- **Experience**: The full master interface.
-- **Features**:
-  - Full bottom navigation bar (Home, List, Setup).
-  - Access to the **Server Setup** and configuration.
-  - **Access URLs**: A dedicated section in Settings that displays all three URLs for easy sharing and reference.
+### 1. Unified Gateway Portal
+When you visit the main URL (`/`), you are now greeted by a selection screen:
+- **Home Dashboard**: Restricted view for controlling physical devices.
+- **Household List**: Restricted view for the shopping list.
+- **Admin Gateway**: Full access to all features, including system configuration.
 
-### 2. Public Home Access (`/home`)
-- **URL**: `http://192.168.29.112:3000/home`
-- **Focus**: Strictly the Ecosystem Dashboard.
-- **Experience**: The navigation bar is hidden, preventing users from accessing the shopping list or settings. This is perfect for wall-mounted tablets or family members who only need device control.
+### 2. Mode-Specific Passwords
+Each mode is protected by a dedicated password:
+- **Home**: `home0466`
+- **List**: `list0466`
+- **Admin**: `admin0466` (Master access)
 
-### 3. Public List Access (`/list`)
-- **URL**: `http://192.168.29.112:3000/list`
-- **Focus**: Strictly the Household runs (Shopping List).
-- **Experience**: Only the shopping list is visible. No device control or setup options are available.
+### 3. Dynamic Security Management
+In the **Setup** (Settings) page (when accessed via `/admin`), you can now:
+- **Manage Passwords**: View and update the passwords for all three modes in real-time.
+- **Access Direct URLs**: See and copy the exact URLs for each mode for easy sharing.
+- **Logout**: Securely clear your current session tokens to return to the portal.
 
-## Technical Improvements
-
-- **Intelligent Routing**: Updated `App.js` to automatically redirect any visit to the root (`/`) straight to `/admin`.
-- **Resilient Navigation**: The `BottomNav` component now dynamically hides itself unless you are explicitly in the `/admin` path.
+### 4. Robust Mode Protection
+The application router now enforces specific "Session Tokens" for each mode. Even if someone tries to type `/admin` or `/list` directly in the browser, they will be redirected to the portal to enter the correct password.
 
 ## How to Verify
 
-1.  **Restart the System**:
+1.  **Clean Rebuild**:
     ```bash
     sudo docker compose down --remove-orphans
     sudo docker compose up -d --build
     ```
-2.  **Test Default Access**: Visit `http://192.168.29.112:3000/`. You should land on the dashboard with the **FULL navigation bar** visible (redirected to `/admin`).
-3.  **Test Public Home**: Visit `/home`. You should see only the dashboard with **NO navigation bar**.
-4.  **Test Public List**: Visit `/list`. You should see only the shopping list with **NO navigation bar**.
-5.  **Check Settings**: While in `/admin`, go to **Setup** (Settings). Verify the **"Access URLs"** section appears and contains the correctly labeled links.
+2.  **Test the Portal**:
+    - Visit `http://192.168.29.112:3000`.
+    - Select "Home Dashboard" and enter `home0466`.
+    - Verify you land on the dashboard and **cannot** navigate to the shopping list or settings.
+3.  **Test Admin Mode**:
+    - Return to the portal (or visit `/admin`).
+    - Enter `admin0466`.
+    - Verify you have full navigation and can access **Settings**.
+4.  **Manage Passwords**:
+    - While in `/admin`, go to **Setup**.
+    - Find the **"Security & Passwords"** section.
+    - Change a password and verify it takes effect immediately.
