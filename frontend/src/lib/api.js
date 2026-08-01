@@ -1,7 +1,7 @@
 import axios from "axios";
 
-const PYTHON_URL_KEY = "jerry_python_server_url"; // For Ecosystem Devices
-const NODE_URL_KEY = "jerry_node_server_url";     // For Household Runs/Users/Auth
+const PYTHON_URL_KEY = "jerry_python_server_url"; // For Ecosystem Devices & Auth
+const NODE_URL_KEY = "jerry_node_server_url";     // For Household Runs
 const TOKEN_KEY = "jerry_token";
 
 const getBaseUrl = () => {
@@ -39,14 +39,13 @@ api.interceptors.request.use((config) => {
   const pythonUrl = getServerUrl();
   const nodeUrl = getStoredNodeUrl();
 
-  // AUTH, LIST, and USERS requests MUST hit the Node Server
-  const isHousehold = config.url.includes("/shopping-list") ||
-                     config.url.includes("/users") ||
-                     config.url.includes("/auth") ||
+  // ROUTING LOGIC:
+  // - Machine .179: Only handles the shopping list data.
+  // - Machine .112: Handles everything else (Auth, Passwords, Devices).
+  const isShopping = config.url.includes("/shopping-list") ||
                      config.url.includes("/shopping-suggestions");
 
-  // If a Node URL is set, use it for household. Otherwise fallback to origin.
-  const targetBase = isHousehold ? (nodeUrl || getBaseUrl()) : (pythonUrl || getBaseUrl());
+  const targetBase = isShopping ? (nodeUrl || getBaseUrl()) : (pythonUrl || getBaseUrl());
 
   // Determine if target is effectively 'localhost' for relative pathing
   const targetHost = targetBase.replace(/^https?:\/\//, "").replace(/\/$/, "");

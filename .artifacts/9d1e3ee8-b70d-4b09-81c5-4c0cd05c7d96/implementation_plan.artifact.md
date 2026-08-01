@@ -1,60 +1,40 @@
-# Implementation Plan: Gateway Portal & Mode Passwords
+# Implementation Plan: Localized Authentication (.112)
 
-This plan introduces a central entry portal at the root URL and protects the specialized access channels (/home, /list, /admin) with configurable passwords.
+Refactor the routing logic to store and validate all credentials (passwords and users) strictly on the local machine (192.168.29.112), while maintaining the remote server (.179) strictly for household data.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> **New Passwords**:
-> - **Public Home**: `home0466`
-> - **Public List**: `list0466`
-> - **Admin Gateway**: `admin0466`
+> **Authentication Move**: Authentication requests (/auth/verify) will now target the **Dashboard Server (Python)** address (.112) instead of the Node address (.179).
 >
-> **Access Model**: Visiting the root URL (`/`) will now show a selection screen instead of redirecting straight to the dashboard.
+> **Data Split**:
+> - **Machine .112**: Master for Passwords, Users, and Ecosystem Devices.
+> - **Machine .179**: Master for Household Runs (Shopping List) only.
 
 ## Proposed Changes
+
+### Frontend Core (`src/lib/api.js`)
+
+#### [MODIFY] [api.js](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/lib/api.js)
+- Update the request interceptor to route `/auth` and `/users` requests to the **Python Server** URL (.112).
+- Ensure `/shopping-list` and `/shopping-suggestions` continue to hit the **Node Server** URL (.179).
 
 ### Backend (`_original_node_ref/server.ts`)
 
 #### [MODIFY] [server.ts](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/_original_node_ref/server.ts)
-- **New State**: Add `gateways` object to store and persist passwords for the three modes.
-- **Persistence**: Save/Load `passwords.json`.
-- **API Endpoints**:
-  - `POST /api/auth/verify`: Verifies a password for a specific mode and returns a session token.
-  - `GET /api/admin/passwords`: Returns current passwords (requires admin token).
-  - `POST /api/admin/passwords`: Updates passwords (requires admin token).
-
-### Frontend Core (`src/lib/auth.jsx`)
-
-#### [MODIFY] [auth.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/lib/auth.jsx)
-- **Multi-Session Support**: Update to store 3 distinct session tokens in `localStorage` (`jerry_home_token`, `jerry_list_token`, `jerry_admin_token`).
-- **Validation**: Add `validateGateway(mode, password)` logic.
-
-### Frontend Routing (`src/App.js`)
-
-#### [MODIFY] [App.js](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/App.js)
-- **Portal Page**: Add a new route at `/` for the entry selection screen.
-- **Route Protection**: Update the `Protected` component to check for the specific token required by the current path.
-
-### Frontend UI
-
-#### [NEW] [Portal.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/pages/Portal.jsx)
-- A clean, immersive landing page with three primary actions: "Home Dashboard", "Household List", and "Admin Gateway".
-- Integrated password prompt for each action.
-
-#### [MODIFY] [Settings.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/pages/Settings.jsx)
-- Add a **"Security & Passwords"** section (only in `/admin`) to change the 3 gateway passwords.
+- Confirm that the local Node server correctly loads and saves `passwords.json` and `users.json` to its current directory.
+- Ensure the recovery admin and default passwords are seeded correctly on the `.112` machine.
 
 ## Verification Plan
 
 ### Manual Verification
-1.  **Initial Visit**: Open `http://192.168.29.112:3000`.
-    - Verify you see the Portal with 3 choices.
-2.  **Home Test**: Click "Home Dashboard", enter `home0466`.
-    - Verify redirection to `/home`.
-3.  **Admin Test**: Visit `/admin` directly.
-    - Verify it asks for a password.
-    - Enter `admin0466` and verify full access.
-4.  **Config Test**: Go to Settings in Admin mode.
-    - Change the "Public Home" password.
-    - Verify the new password works at `/home`.
+1.  **Deploy**: `sudo docker compose up -d --build` on the .112 machine.
+2.  **Configuration**:
+    - Dashboard Server (Python): `http://localhost:3000` (Local bridge).
+    - Dashboard Server (Node): `http://192.168.29.179:3000` (Remote list).
+3.  **Auth Test**:
+    - Enter `admin0466` in the portal.
+    - Verify via browser logs (F12) that the request hits **localhost:3000/api/auth/verify**.
+    - This confirms it is using the credentials on the .112 machine.
+4.  **Sync Test**:
+    - Verify that the Household List is still pulling from .179.

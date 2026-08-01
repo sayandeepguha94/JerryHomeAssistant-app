@@ -1,10 +1,7 @@
-# Tasks: Gateway Portal & Mode Passwords
+# Tasks: Localized Authentication
 
-- [x] Implement Gateway password persistence in `server.ts`
-- [x] Add `/api/auth/verify` and password management endpoints to `server.ts`
-- [x] Implement `validateGateway` and session storage in `auth.jsx`
-- [x] Create `Portal.jsx` landing page with selection and password prompt
-- [x] Configure routes in `App.js` to use the new Portal and Mode protection
-- [x] Add "Security & Passwords" management to `Settings.jsx`
-- [x] Remove obsolete `Login.jsx` and `Users.jsx`
-- [x] Verify production build
+- [x] Refactor `api.js` to route Auth/Users to Python Server (.112)
+- [x] Keep Shopping/Suggestions routed to Node Server (.179)
+- [x] Verify `server.ts` handles local file persistence for passwords
+- [x] Fix localhost routing for browser compatibility
+- [x] Finalize production build

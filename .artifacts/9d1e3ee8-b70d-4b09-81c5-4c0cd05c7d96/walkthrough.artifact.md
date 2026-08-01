@@ -1,46 +1,39 @@
-# Walkthrough: Gateway Portal & Mode-Based Security
+# Walkthrough: Localized Authentication (.112)
 
-I have transformed the application into a secure gateway portal that allows you to choose between three specialized access modes, each protected by its own password.
+I have refactored the system to ensure that all authentication and password validation happen strictly on your local machine (**192.168.29.112**), while keeping the shopping list on your remote server (**192.168.29.179**).
 
-## Key Features
+## Changes Made
 
-### 1. Unified Gateway Portal
-When you visit the main URL (`/`), you are now greeted by a selection screen:
-- **Home Dashboard**: Restricted view for controlling physical devices.
-- **Household List**: Restricted view for the shopping list.
-- **Admin Gateway**: Full access to all features, including system configuration.
+### 1. Shifted Authentication Hub
+Previously, the app was trying to find your credentials on the remote Node server (.179). I have updated the routing logic in `api.js` to send all security-related requests (`/auth/verify`, `/users`) to the **Dashboard Server (Python)** address.
+- Since you set this to `localhost:3000` on the local machine, the app will now always use the local `passwords.json` for validation.
 
-### 2. Mode-Specific Passwords
-Each mode is protected by a dedicated password:
-- **Home**: `home0466`
-- **List**: `list0466`
-- **Admin**: `admin0466` (Master access)
+### 2. Local File Master (.112)
+The Node server running on your local machine is now the "Master" for:
+- **Passwords**: `home0466`, `list0466`, `admin0466`.
+- **Ecosystem Devices**: Toggles and fan speeds.
+- **Voice Commands**: Proxied to your physical hub.
 
-### 3. Dynamic Security Management
-In the **Setup** (Settings) page (when accessed via `/admin`), you can now:
-- **Manage Passwords**: View and update the passwords for all three modes in real-time.
-- **Access Direct URLs**: See and copy the exact URLs for each mode for easy sharing.
-- **Logout**: Securely clear your current session tokens to return to the portal.
+### 3. Remote Data Sync (.179)
+The app continues to talk to your remote server for **Household Runs** (Shopping List) and **Suggestions**. This ensures your data is preserved even if the local machine is reset.
 
-### 4. Robust Mode Protection
-The application router now enforces specific "Session Tokens" for each mode. Even if someone tries to type `/admin` or `/list` directly in the browser, they will be redirected to the portal to enter the correct password.
+### 4. Smart Local Routing
+I refined the "Local" detection. If you set a server address to `localhost` or `127.0.0.1`, the app automatically switches to **Relative Paths** (`/api`). This fixes the browser security issue where your phone couldn't "see" the server.
 
 ## How to Verify
 
 1.  **Clean Rebuild**:
     ```bash
     sudo docker compose down --remove-orphans
-    sudo docker compose up -d --build
+    sudo docker compose build --no-cache
+    sudo docker compose up -d
     ```
-2.  **Test the Portal**:
-    - Visit `http://192.168.29.112:3000`.
-    - Select "Home Dashboard" and enter `home0466`.
-    - Verify you land on the dashboard and **cannot** navigate to the shopping list or settings.
-3.  **Test Admin Mode**:
-    - Return to the portal (or visit `/admin`).
-    - Enter `admin0466`.
-    - Verify you have full navigation and can access **Settings**.
-4.  **Manage Passwords**:
-    - While in `/admin`, go to **Setup**.
-    - Find the **"Security & Passwords"** section.
-    - Change a password and verify it takes effect immediately.
+2.  **Apply Your Configuration**:
+    - Access `http://192.168.29.112:3000`.
+    - Go to **Settings** (via the "Configure Connection" button on the portal).
+    - **Dashboard Server (Python)**: Set to `http://localhost:3000`.
+    - **Dashboard Server (Node)**: Set to `http://192.168.29.179:3000`.
+    - Click **Save**.
+3.  **The Result**:
+    - **Auth**: Enter `admin0466` in the portal. It will now correctly hit the local machine for validation.
+    - **Shopping**: Your remote list from .179 will appear inside the dashboard.
