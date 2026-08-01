@@ -47,14 +47,15 @@ api.interceptors.request.use((config) => {
 
   const targetBase = isShopping ? (nodeUrl || getBaseUrl()) : (pythonUrl || getBaseUrl());
 
-  // Determine if target is effectively the same as current dashboard host
+  // SMARTER LOCAL DETECTION:
   const targetHost = targetBase.replace(/^https?:\/\//, "").replace(/\/$/, "");
   const currentHost = typeof window !== "undefined" ? window.location.host : "";
 
-  // If target matches current host OR target is 'localhost', use relative paths
+  // Use relative if target is same IP, OR if target is literally 'localhost'
   const isLocal = targetHost === currentHost ||
-                  targetHost.includes("localhost") ||
-                  targetHost.includes("127.0.0.1");
+                  targetHost.toLowerCase().includes("localhost") ||
+                  targetHost.includes("127.0.0.1") ||
+                  targetHost.includes("0.0.0.0");
 
   const cleanPath = config.url.replace(/^\/api/, "").replace(/^\//, "");
 
@@ -87,8 +88,8 @@ export async function pingServer(customUrl) {
   const base = (customUrl || "").trim().replace(/\/+$/, "");
   if (!base) return { online: false, error: "no server url" };
   try {
-    // Force relative check if localhost
-    const target = (base.includes("localhost") || base.includes("127.0.0.1")) ? "" : base;
+    const isLocal = base.toLowerCase().includes("localhost") || base.includes("127.0.0.1");
+    const target = isLocal ? "" : base.replace(/\/+$/, "");
     const r = await axios.get(`${target}/api/health`, { timeout: 6000 });
     return { online: r.status === 200, status: r.status };
   } catch (e) {

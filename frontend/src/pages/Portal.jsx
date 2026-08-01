@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Home, ShoppingBasket, Shield, Key, ChevronRight, Loader2, Settings } from "lucide-react";
+import { Home, ShoppingBasket, Shield, Key, ChevronRight, Loader2, Settings, AlertCircle } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { getFallbackUrl } from "../lib/api";
+import { getServerUrl } from "../lib/api";
 
 export default function Portal() {
   const { validateGateway } = useAuth();
@@ -132,11 +132,14 @@ export default function Portal() {
                       onClick={() => nav("/admin/settings")}
                       className="w-full py-3 flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest text-white/20 hover:text-white/40 transition-colors"
                     >
-                      <Settings className="w-3 h-3" /> Configure Connection
+                      <Settings className="w-3.5 h-3.5" /> Configure Connection
                     </button>
 
-                    <div className="text-[9px] text-white/10 font-mono">
-                       Authenticating via: {getFallbackUrl()}
+                    <div className="pt-2 border-t border-white/5 flex flex-col items-center gap-1">
+                      <div className="flex items-center gap-1.5 text-[9px] text-white/20 font-mono">
+                         <AlertCircle className="w-2.5 h-2.5" />
+                         Target: {getServerUrl().includes('localhost') ? '(Relative) /api/auth/verify' : getServerUrl() + '/api/auth/verify'}
+                      </div>
                     </div>
                   </div>
                 </form>

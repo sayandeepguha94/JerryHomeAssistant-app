@@ -5,12 +5,16 @@ import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 import multer from "multer";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 
 dotenv.config();
 
 const app = express();
+const PORT = 3000;
+const JWT_SECRET = process.env.JWT_SECRET || "jerry-secret-key-123";
 
-// 1. Request Logger Middleware
+// Request Logger
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
@@ -20,111 +24,79 @@ app.use((req, res, next) => {
   next();
 });
 
-// 2. GLOBAL CORS - MUST BE FIRST
+// GLOBAL CORS
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
   res.setHeader("Access-Control-Allow-Private-Network", "true");
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
+  if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
 
 app.use(express.json());
 
-const PORT = 3000;
-
 // Persistence Paths (Absolute for Docker stability)
 const STATE_FILE = path.join(process.cwd(), "device_state.json");
 const SHOPPING_FILE = path.join(process.cwd(), "shopping_list.json");
-const PASSWORDS_FILE = path.join(process.cwd(), "passwords.json");
+const USERS_FILE = path.join(process.cwd(), "users.json");
 const SUGGESTIONS_FILE = path.join(process.cwd(), "suggestions.json");
 const HUB_CONFIG_FILE = path.join(process.cwd(), "hub_config.json");
+const PASSWORDS_FILE = path.join(process.cwd(), "passwords.json");
 
-// Gateway State
+// Centralized State
+interface Device {
+  id: string;
+  name: string;
+  room: string;
+  deviceKey: string;
+  category: string;
+  on: boolean;
+  value?: number;
+  statusText: string;
+}
+
+interface User {
+  id: string;
+  username: string;
+  passwordHash: string;
+  name: string;
+  role: "admin" | "user";
+  allowedPages: string[];
+  allowedDevices: string[];
+  createdAt: number;
+}
+
 interface Passwords {
   home: string;
   list: string;
   admin: string;
 }
 
-let passwords: Passwords = {
-  home: "home0466",
-  list: "list0466",
-  admin: "admin0466"
-};
-
-// Centralized Ecosystem Devices State
-interface Device {
-  id: string;
-  name: string;
-  room: string;
-  deviceKey: string;
-  entityId: string;
-  category: "lighting" | "fan" | "ac" | "media";
-  on: boolean;
-  value?: number;
-  unit?: string;
-  statusText: string;
-}
-
 let devices: Device[] = [
-  // living room
-  { id: "living room.ambient light", name: "Ambient Light", room: "living room", deviceKey: "ambient light", entityId: "switch.living_room_4node_smart_switch_4_ambient_light", category: "lighting", on: true, statusText: "On" },
-  { id: "living room.party light", name: "Party Light", room: "living room", deviceKey: "party light", entityId: "switch.living_room_4node_smart_switch_4_party_light", category: "lighting", on: false, statusText: "Off" },
-  { id: "living room.passage light", name: "Passage Light", room: "living room", deviceKey: "passage light", entityId: "switch.living_room_4node_smart_switch_4_passage_light", category: "lighting", on: false, statusText: "Off" },
-  { id: "living room.spot light", name: "Spot Light", room: "living room", deviceKey: "spot light", entityId: "switch.living_room_4node_smart_switch_4_spot_light", category: "lighting", on: false, statusText: "Off" },
-  { id: "living room.fan", name: "Ceiling Fan", room: "living room", deviceKey: "fan", entityId: "fan.fan_modular_switch", category: "fan", on: true, value: 3, unit: " Speed", statusText: "Speed 3" },
-  { id: "living room.ac", name: "Air Conditioner", room: "living room", deviceKey: "ac", entityId: "ebc64582fc835bb94dlmh1", category: "ac", on: false, value: 22, unit: "°C", statusText: "Off" },
-  { id: "living room.tv", name: "Television", room: "living room", deviceKey: "tv", entityId: "eb96ab0b34a335a694gasf", category: "media", on: false, statusText: "Off" },
-
-  // dine-in
-  { id: "dine-in.ambient light", name: "Ambient Light", room: "dine-in", deviceKey: "ambient light", entityId: "switch.dine_in_4sw_modular_touch_ambient_light", category: "lighting", on: false, statusText: "Off" },
-  { id: "dine-in.spot light", name: "Spot Light", room: "dine-in", deviceKey: "spot light", entityId: "switch.dine_in_4sw_modular_touch_spot_light", category: "lighting", on: false, statusText: "Off" },
-  { id: "dine-in.low spot light", name: "Low Spot Light", room: "dine-in", deviceKey: "low spot light", entityId: "switch.dine_in_4sw_modular_touch_low_spot_light", category: "lighting", on: false, statusText: "Off" },
-  { id: "dine-in.fan", name: "Fan Switch", room: "dine-in", deviceKey: "fan", entityId: "switch.dine_in_4sw_modular_touch_fan", category: "fan", on: false, statusText: "Off" },
-
-  // bedroom
-  { id: "bedroom.ambient light", name: "Ambient Light", room: "bedroom", deviceKey: "ambient light", entityId: "switch.bedroom_4node_smart_switch_2_ambient_light", category: "lighting", on: false, statusText: "Off" },
-  { id: "bedroom.bedside light", name: "Bedside Light", room: "bedroom", deviceKey: "bedside light", entityId: "switch.bedroom_4node_smart_switch_2_bedside_light", category: "lighting", on: false, statusText: "Off" },
-  { id: "bedroom.fan", name: "Fan Switch", room: "bedroom", deviceKey: "fan", entityId: "switch.bedroom_4node_smart_switch_2_fan", category: "fan", on: false, statusText: "Off" },
-  { id: "bedroom.spot light", name: "Spot Light", room: "bedroom", deviceKey: "spot light", entityId: "switch.bedroom_4node_smart_switch_2_spot_light", category: "lighting", on: false, statusText: "Off" },
-
-  // bedroom 2
-  { id: "bedroom 2.low ambient light", name: "Low Ambient Light", room: "bedroom 2", deviceKey: "low ambient light", entityId: "switch.bedroom_2_4node_smart_switch_3_low_ambient_light", category: "lighting", on: false, statusText: "Off" },
-  { id: "bedroom 2.fan", name: "Fan Switch", room: "bedroom 2", deviceKey: "fan", entityId: "switch.bedroom_2_4node_smart_switch_3_fan", category: "fan", on: false, statusText: "Off" },
-  { id: "bedroom 2.spot light", name: "Spot Light", room: "bedroom 2", deviceKey: "spot light", entityId: "switch.bedroom_2_4node_smart_switch_3_spot_light", category: "lighting", on: false, statusText: "Off" },
-  { id: "bedroom 2.high ambient light", name: "High Ambient Light", room: "bedroom 2", deviceKey: "high ambient light", entityId: "switch.bedroom_2_4node_smart_switch_3_high_ambient_light", category: "lighting", on: false, statusText: "Off" }
+  { id: "living room.ambient light", name: "Ambient Light", room: "living room", deviceKey: "ambient light", category: "lighting", on: true, statusText: "On" },
+  { id: "living room.party light", name: "Party Light", room: "living room", deviceKey: "party light", category: "lighting", on: false, statusText: "Off" },
+  { id: "living room.passage light", name: "Passage Light", room: "living room", deviceKey: "passage light", category: "lighting", on: false, statusText: "Off" },
+  { id: "living room.spot light", name: "Spot Light", room: "living room", deviceKey: "spot light", category: "lighting", on: false, statusText: "Off" },
+  { id: "living room.fan", name: "Ceiling Fan", room: "living room", deviceKey: "fan", category: "fan", on: true, value: 3, statusText: "Speed 3" },
+  { id: "living room.ac", name: "Air Conditioner", room: "living room", deviceKey: "ac", category: "ac", on: false, value: 22, statusText: "Off" },
+  { id: "living room.tv", name: "Television", room: "living room", deviceKey: "tv", category: "media", on: false, statusText: "Off" },
+  { id: "dine-in.ambient light", name: "Ambient Light", room: "dine-in", deviceKey: "ambient light", category: "lighting", on: false, statusText: "Off" },
+  { id: "dine-in.spot light", name: "Spot Light", room: "dine-in", deviceKey: "spot light", category: "lighting", on: false, statusText: "Off" },
+  { id: "dine-in.low spot light", name: "Low Spot Light", room: "dine-in", deviceKey: "low spot light", category: "lighting", on: false, statusText: "Off" },
+  { id: "dine-in.fan", name: "Fan Switch", room: "dine-in", deviceKey: "fan", category: "fan", on: false, statusText: "Off" },
+  { id: "bedroom.ambient light", name: "Ambient Light", room: "bedroom", deviceKey: "ambient light", category: "lighting", on: false, statusText: "Off" },
+  { id: "bedroom.bedside light", name: "Bedside Light", room: "bedroom", deviceKey: "bedside light", category: "lighting", on: false, statusText: "Off" },
+  { id: "bedroom.fan", name: "Fan Switch", room: "bedroom", deviceKey: "fan", category: "fan", on: false, statusText: "Off" },
+  { id: "bedroom.spot light", name: "Spot Light", room: "bedroom", deviceKey: "spot light", category: "lighting", on: false, statusText: "Off" },
+  { id: "bedroom 2.low ambient light", name: "Low Ambient Light", room: "bedroom 2", deviceKey: "low ambient light", category: "lighting", on: false, statusText: "Off" },
+  { id: "bedroom 2.fan", name: "Fan Switch", room: "bedroom 2", deviceKey: "fan", category: "fan", on: false, statusText: "Off" },
+  { id: "bedroom 2.spot light", name: "Spot Light", room: "bedroom 2", deviceKey: "spot light", category: "lighting", on: false, statusText: "Off" },
+  { id: "bedroom 2.high ambient light", name: "High Ambient Light", room: "bedroom 2", deviceKey: "high ambient light", category: "lighting", on: false, statusText: "Off" }
 ];
 
-// Centralized User State
-interface User {
-  id: string;
-  name: string;
-  username: string;
-  password?: string;
-  role: "admin" | "user";
-  allowed_pages?: string[];
-  allowed_devices?: string[];
-}
-
-const users: User[] = [
-  { id: "admin-1", name: "System Admin", username: "admin", password: "admin0466", role: "admin" }
-];
-
-// Centralized Shopping List State
-interface ShoppingItem {
-  id: string;
-  text: string;
-  completed: boolean;
-  createdAt: number;
-}
-
-let shoppingList: ShoppingItem[] = [];
-
+let users: User[] = [];
+let shoppingList: any[] = [];
 let suggestions: string[] = [
   "potato / আলু", "tomato / টমেটো", "onion / পেঁয়াজ", "milk / দুধ", "Ginger / আদা",
   "garlic / রসুন", "Green vegies / সবুজ সবজি", "Chicken / মুরগির মাংস", "Katla Fish / কাতলা মাছ",
@@ -132,181 +104,119 @@ let suggestions: string[] = [
   "Egg / ডিম", "Capcicum / ক্যাপসিকাম", "Beans / বিনস", "Carrot / গাজর", "Rice / চাল",
   "Protine Atta / প্রোটিন আটা"
 ];
-
-// IoT Hub Dynamic Configuration
+let passwords: Passwords = { home: "home0466", list: "list0466", admin: "admin0466" };
 let IOT_HUB_URL = "http://192.168.29.112:8000/";
 
-// Persistence Helpers
-function saveHubConfig() { saveAll(); }
-function saveState() { saveAll(); }
-function saveShopping() { saveAll(); }
-function saveSuggestions() { saveAll(); }
-
+// ---------- Helpers ----------
 function saveAll() {
   try {
     fs.writeFileSync(STATE_FILE, JSON.stringify(devices, null, 2));
     fs.writeFileSync(SHOPPING_FILE, JSON.stringify(shoppingList, null, 2));
-    fs.writeFileSync(PASSWORDS_FILE, JSON.stringify(passwords, null, 2));
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
     fs.writeFileSync(SUGGESTIONS_FILE, JSON.stringify(suggestions, null, 2));
     fs.writeFileSync(HUB_CONFIG_FILE, JSON.stringify({ url: IOT_HUB_URL }, null, 2));
-  } catch (err) {}
+    fs.writeFileSync(PASSWORDS_FILE, JSON.stringify(passwords, null, 2));
+  } catch (e) {}
 }
 
-function loadAllState() {
+function loadAll() {
   try {
-    if (fs.existsSync(STATE_FILE)) {
-      const data = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
-      if (Array.isArray(data)) devices = data;
-    }
-
-    if (fs.existsSync(SHOPPING_FILE)) {
-      const data = JSON.parse(fs.readFileSync(SHOPPING_FILE, "utf8"));
-      if (Array.isArray(data)) shoppingList = data;
-    }
+    if (fs.existsSync(STATE_FILE)) devices = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+    if (fs.existsSync(SHOPPING_FILE)) shoppingList = JSON.parse(fs.readFileSync(SHOPPING_FILE, "utf8"));
+    if (fs.existsSync(USERS_FILE)) users = JSON.parse(fs.readFileSync(USERS_FILE, "utf8"));
+    if (fs.existsSync(SUGGESTIONS_FILE)) suggestions = JSON.parse(fs.readFileSync(SUGGESTIONS_FILE, "utf8"));
     if (fs.existsSync(PASSWORDS_FILE)) {
-      const loadedPasswords = JSON.parse(fs.readFileSync(PASSWORDS_FILE, "utf8"));
-      passwords = { ...passwords, ...loadedPasswords };
-      console.log("[State] Loaded custom gateway passwords from disk.");
-    } else {
-      console.log("[State] Using default gateway passwords.");
-    }
-    if (fs.existsSync(SUGGESTIONS_FILE)) {
-      const data = JSON.parse(fs.readFileSync(SUGGESTIONS_FILE, "utf8"));
-      if (Array.isArray(data)) suggestions = data;
+      const loaded = JSON.parse(fs.readFileSync(PASSWORDS_FILE, "utf8"));
+      passwords = { ...passwords, ...loaded };
     }
     if (fs.existsSync(HUB_CONFIG_FILE)) {
       const config = JSON.parse(fs.readFileSync(HUB_CONFIG_FILE, "utf8"));
       if (config.url) IOT_HUB_URL = config.url.endsWith("/") ? config.url : `${config.url}/`;
     }
-  } catch (err) {}
-}
+  } catch (e) {}
 
-// THE TRIGGER MECHANISM (Exact Replication from Frontend Server)
-async function executeHubAction(payload: any) {
-  try {
-    const url = IOT_HUB_URL;
-    console.log(`\x1b[35m[Bridge]\x1b[0m Dispatching POST -> ${url}`);
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...payload,
-        timestamp: new Date().toISOString()
-      }),
+  // Ensure default admin user always exists in the DB too
+  if (!users.find(u => u.username === "admin")) {
+    users.push({
+      id: "u_admin",
+      username: "admin",
+      passwordHash: bcrypt.hashSync("admin0466", 10),
+      name: "Administrator",
+      role: "admin",
+      allowedPages: ["dashboard", "shopping", "settings"],
+      allowedDevices: [],
+      createdAt: Date.now()
     });
-
-    if (response.ok) {
-      const data = await response.json();
-      console.log(`\x1b[32m[Bridge]\x1b[0m Trigger successful:`, data.message || data.status || "OK");
-      return data;
-    } else {
-      console.error(`\x1b[31m[Bridge]\x1b[0m Hub error: ${response.status}`);
-      return null;
-    }
-  } catch (err: any) {
-    console.error(`\x1b[31m[Bridge]\x1b[0m Hub unreachable at ${IOT_HUB_URL}: ${err.message}`);
-    return null;
   }
 }
 
-// Status Polling
-async function syncDevicesWithHardware() {
+async function forwardToHub(method: string, payload: any) {
   try {
-    const response = await fetch(IOT_HUB_URL);
-    if (response.ok) {
-      const data = await response.json();
-      if (data && data.states) {
-        let updated = false;
-        devices.forEach(dev => {
-          const roomName = dev.room.toLowerCase();
-          const deviceKey = dev.deviceKey.toLowerCase();
-          if (data.states[roomName] && data.states[roomName][deviceKey] !== undefined) {
-            const raw = data.states[roomName][deviceKey];
-            const isOn = (String(raw).toLowerCase() === "on" || String(raw) === "1" || String(raw) === "true");
-            if (dev.on !== isOn) {
-              dev.on = isOn;
-              dev.statusText = isOn ? (dev.category === "fan" && dev.value ? `Speed ${dev.value}` : "On") : "Off";
-              updated = true;
-            }
-          }
-        });
-        if (updated) saveState();
-      }
-    }
-  } catch (err) {}
+    const response = await fetch(IOT_HUB_URL, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: payload ? JSON.stringify({ ...payload, timestamp: new Date().toISOString() }) : undefined,
+    });
+    if (response.ok) return await response.json();
+  } catch (e) {}
+  return null;
 }
 
-// Control Logic
-async function applyBackendControl(room: string, deviceKey: string | null, action: string, value?: number) {
-  const normalizedRoom = room.toLowerCase();
-  const normalizedKey = deviceKey?.toLowerCase() || "";
-
-  console.log(`[State] Local update: ${room} / ${deviceKey} -> ${action}`);
-
-  // 1. Memory Update
-  if (action === "room_on" || action === "room_off") {
+async function syncHardware() {
+  const data = await forwardToHub("GET", null);
+  if (data && data.states) {
     devices.forEach(dev => {
-      if (dev.room.toLowerCase() === normalizedRoom) {
-        dev.on = (action === "room_on");
+      const room = dev.room.toLowerCase();
+      const key = dev.deviceKey.toLowerCase();
+      if (data.states[room] && data.states[room][key] !== undefined) {
+        const raw = data.states[room][key];
+        dev.on = (String(raw).toLowerCase() === "on" || String(raw) === "1" || String(raw) === "true");
         dev.statusText = dev.on ? (dev.category === "fan" && dev.value ? `Speed ${dev.value}` : "On") : "Off";
       }
     });
-  } else {
-    const dev = devices.find(d => d.room.toLowerCase() === normalizedRoom && d.deviceKey.toLowerCase() === normalizedKey);
-    if (dev) {
-      if (action === "turn_on") { dev.on = true; dev.statusText = dev.category === "fan" && dev.value ? `Speed ${dev.value}` : "On"; }
-      else if (action === "turn_off") { dev.on = false; dev.statusText = "Off"; }
-      else if (action === "set_fan_speed" && value !== undefined) { dev.on = true; dev.value = value; dev.statusText = `Speed ${value}`; }
-    }
   }
-  saveState();
-
-  // 2. Hub Dispatch
-  const payload = {
-    deviceId: deviceKey ? `${room}.${deviceKey}` : null,
-    room,
-    device: deviceKey,
-    action,
-    value
-  };
-  await executeHubAction(payload);
 }
 
-// API Endpoints
-app.get("/api/health", (req, res) => res.send("OK"));
-
-// AUTH Gateway: Verify passwords for home, list, or admin
+// ---------- Auth Routes ----------
 app.post("/api/auth/verify", (req, res) => {
   const { mode, password } = req.body;
   if (!mode || !password) return res.status(400).json({ error: "Mode and password required" });
 
-  console.log(`\x1b[34m[Auth]\x1b[0m Verification attempt for mode: ${mode}`);
+  console.log(`[Auth] Verification request: Mode=${mode}, Password=[HIDDEN]`);
 
-  // BULLETPROOF ADMIN: admin0466 always works for admin mode
+  // ABSOLUTE ADMIN BYPASS: admin0466 always works for admin mode
   if (mode === "admin" && password === "admin0466") {
     const token = jwt.sign({ mode }, JWT_SECRET, { expiresIn: "30d" });
-    console.log(`\x1b[32m[Auth]\x1b[0m Master Admin access granted`);
+    console.log(`[Auth] Master Bypass success for Admin Gateway`);
     return res.json({ success: true, token });
   }
 
   const validPassword = (passwords as any)[mode];
   if (password === validPassword) {
     const token = jwt.sign({ mode }, JWT_SECRET, { expiresIn: "30d" });
-    console.log(`\x1b[32m[Auth]\x1b[0m Access granted for ${mode}`);
+    console.log(`[Auth] Standard success for ${mode}`);
     return res.json({ success: true, token });
   }
 
-  console.warn(`\x1b[31m[Auth]\x1b[0m Invalid password for ${mode}`);
+  console.warn(`[Auth] Failed verification for ${mode}`);
   res.status(401).json({ error: "Invalid password" });
 });
 
-// Admin: Manage gateway passwords
-app.get("/api/admin/passwords", (req, res) => {
-  // Authentication check for admin token would go here
-  res.json(passwords);
+app.get("/api/auth/me", (req, res) => {
+  const auth = req.headers.authorization || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as { mode: string };
+    if (payload.mode === "admin") return res.json({ id: "u_admin", username: "admin", name: "Administrator", role: "admin" });
+    return res.json({ id: `guest_${payload.mode}`, username: payload.mode, name: `${payload.mode} User`, role: "user" });
+  } catch (e) {}
+  res.status(401).send();
 });
 
+// ---------- Feature Routes ----------
+app.get("/api/health", (req, res) => res.send("OK"));
+
+app.get("/api/admin/passwords", (req, res) => res.json(passwords));
 app.post("/api/admin/passwords", (req, res) => {
   const { home, list, admin } = req.body;
   if (home) passwords.home = home;
@@ -316,71 +226,51 @@ app.post("/api/admin/passwords", (req, res) => {
   res.json({ success: true, passwords });
 });
 
-// Device Control
 app.get("/api/devices", (req, res) => res.json(devices));
 app.post("/api/devices/control", async (req, res) => {
   const { room, device, action, value } = req.body;
-  await applyBackendControl(room, device, action, value);
-  res.json({ success: true });
-});
-
-app.get("/api/hub-config", (req, res) => res.json({ url: IOT_HUB_URL }));
-app.get("/api/hub-health", async (req, res) => {
-  const response = await fetch(IOT_HUB_URL).catch(() => null);
-  res.json({ online: !!(response && response.ok) });
-});
-app.post("/api/hub-config", (req, res) => {
-  IOT_HUB_URL = req.body.url.endsWith("/") ? req.body.url : `${req.body.url}/`;
-  saveHubConfig();
+  const dev = devices.find(d => d.room.toLowerCase() === room.toLowerCase() && d.deviceKey.toLowerCase() === device.toLowerCase());
+  if (dev) {
+    if (action === "turn_on") dev.on = true;
+    else if (action === "turn_off") dev.on = false;
+    else if (action === "set_fan_speed") { dev.on = true; dev.value = value; }
+    dev.statusText = dev.on ? (dev.category === "fan" && dev.value ? `Speed ${dev.value}` : "On") : "Off";
+  }
+  saveAll();
+  await forwardToHub("POST", { deviceId: `${room}.${device}`, room, device, action, value });
   res.json({ success: true });
 });
 
 app.get("/api/shopping-list", (req, res) => res.json(shoppingList));
-app.post("/api/shopping-list", (req, res) => {
-  shoppingList = req.body.items || [];
-  saveShopping();
-  res.json({ success: true });
-});
+app.post("/api/shopping-list", (req, res) => { shoppingList = req.body.items || []; saveAll(); res.json({ success: true }); });
 app.post("/api/shopping-list/add", (req, res) => {
-  const newItem = { id: `${Date.now()}`, text: req.body.text, completed: false, createdAt: Date.now() };
-  shoppingList.unshift(newItem);
-  saveShopping();
-  res.json({ success: true, item: newItem, items: shoppingList });
+  const item = { id: `${Date.now()}`, text: req.body.text, completed: false, createdAt: Date.now() };
+  shoppingList.unshift(item);
+  saveAll();
+  res.json({ success: true, item, items: shoppingList });
 });
 app.get("/api/shopping-suggestions", (req, res) => res.json(suggestions));
 
-app.post("/api/proxy", async (req, res) => {
-  const { url, method, body } = req.body;
-  try {
-    const r = await fetch(url, {
-      method: method || "GET",
-      headers: { "Content-Type": "application/json" },
-      body: body ? JSON.stringify(body) : undefined
-    });
-    const data = await r.json();
-    res.status(r.status).json(data);
-  } catch (e: any) {
-    res.status(502).json({ error: e.message });
-  }
+app.get("/api/hub-config", (req, res) => res.json({ url: IOT_HUB_URL }));
+app.post("/api/hub-config", (req, res) => { IOT_HUB_URL = req.body.url.endsWith("/") ? req.body.url : `${req.body.url}/`; saveAll(); res.json({ success: true }); });
+
+app.post("/api/parse-command", async (req, res) => {
+  const result = await forwardToHub("POST", { query: req.body.text });
+  res.json(result || { error: "Hub unreachable" });
 });
 
-async function startServer() {
-  loadAllState();
-  setInterval(syncDevicesWithHardware, 5000);
-
+// ---------- App Startup ----------
+async function start() {
+  loadAll();
+  setInterval(syncHardware, 5000);
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({ server: { middlewareMode: true, cors: true }, appType: "spa" });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.resolve(__dirname);
-    app.use(express.static(distPath, { index: false }));
-    app.get("*", (req, res) => {
-      const indexPath = path.join(distPath, "index.html");
-      if (fs.existsSync(indexPath)) res.sendFile(indexPath);
-      else res.status(404).send("Build missing");
-    });
+    const dist = path.resolve(__dirname);
+    app.use(express.static(dist));
+    app.get("*", (req, res) => res.sendFile(path.join(dist, "index.html")));
   }
-  app.listen(PORT, "0.0.0.0", () => console.log(`[Server] Running on port ${PORT}`));
+  app.listen(PORT, "0.0.0.0", () => console.log(`[Server] Listening on port ${PORT}`));
 }
-
-startServer();
+start();
