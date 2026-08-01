@@ -27,8 +27,8 @@ function AppShell() {
         </Route>
 
         {/* Default Redirects */}
-        <Route path="/" element={<Navigate to="/home" replace />} />
-        <Route path="*" element={<Navigate to="/home" replace />} />
+        <Route path="/" element={<Navigate to="/admin" replace />} />
+        <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>
       <BottomNav />
     </>
