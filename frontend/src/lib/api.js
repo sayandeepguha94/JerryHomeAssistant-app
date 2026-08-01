@@ -1,8 +1,7 @@
 import axios from "axios";
 
 const PYTHON_URL_KEY = "jerry_python_server_url"; // For Ecosystem Devices
-const NODE_URL_KEY = "jerry_node_server_url";     // For Household Runs/Users
-const OLD_URL_KEY = "jerry_server_url";           // For migration
+const NODE_URL_KEY = "jerry_node_server_url";     // For Household Runs/Users/Auth
 const TOKEN_KEY = "jerry_token";
 
 const getBaseUrl = () => {
@@ -10,17 +9,12 @@ const getBaseUrl = () => {
   return "";
 };
 
-// Migration Logic: Pull from old key if new ones are missing
 const getStoredNodeUrl = () => {
-  const node = localStorage.getItem(NODE_URL_KEY);
-  if (node) return node;
-  const old = localStorage.getItem(OLD_URL_KEY);
-  if (old && !old.includes("0.0.0.0")) return old;
-  return getBaseUrl();
+  return localStorage.getItem(NODE_URL_KEY); // Return null if not set
 };
 
 export const getServerUrl = () => localStorage.getItem(PYTHON_URL_KEY) || getBaseUrl();
-export const getFallbackUrl = () => getStoredNodeUrl();
+export const getFallbackUrl = () => getStoredNodeUrl() || getBaseUrl();
 
 export const setServerUrl = (url) => {
   const normalized = (url || "").trim().replace(/\/+$/, "");
@@ -35,7 +29,6 @@ export const setFallbackUrl = (url) => {
 export const clearServerUrl = () => {
   localStorage.removeItem(PYTHON_URL_KEY);
   localStorage.removeItem(NODE_URL_KEY);
-  localStorage.removeItem(OLD_URL_KEY);
 };
 
 export const api = axios.create({
@@ -43,29 +36,26 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const pythonUrl = localStorage.getItem(PYTHON_URL_KEY) || getBaseUrl();
+  const pythonUrl = getServerUrl();
   const nodeUrl = getStoredNodeUrl();
 
+  // AUTH, LIST, and USERS requests MUST hit the Node Server
   const isHousehold = config.url.includes("/shopping-list") ||
                      config.url.includes("/users") ||
                      config.url.includes("/auth") ||
-                     config.url.includes("/login") ||
                      config.url.includes("/shopping-suggestions");
 
-  const targetBase = isHousehold ? nodeUrl : pythonUrl;
+  // If a Node URL is set, use it for household. Otherwise fallback to origin.
+  const targetBase = isHousehold ? (nodeUrl || getBaseUrl()) : (pythonUrl || getBaseUrl());
 
-  // SMART ROUTING: Use relative paths if targeting current host or localhost
-  const currentHost = typeof window !== "undefined" ? window.location.host : "";
+  // Determine if target is effectively 'localhost' for relative pathing
   const targetHost = targetBase.replace(/^https?:\/\//, "").replace(/\/$/, "");
-
-  const isSameOrigin = !targetBase ||
-                       targetHost === currentHost ||
-                       targetHost === "localhost:3000" ||
-                       targetHost === "127.0.0.1:3000";
+  const currentHost = typeof window !== "undefined" ? window.location.host : "";
+  const isLocal = targetHost === currentHost || targetHost.includes("localhost") || targetHost.includes("127.0.0.1");
 
   const cleanPath = config.url.replace(/^\/api/, "").replace(/^\//, "");
 
-  if (isSameOrigin) {
+  if (isLocal) {
     config.url = `/api/${cleanPath}`;
   } else {
     config.url = `${targetBase.replace(/\/+$/, "")}/api/${cleanPath}`;
@@ -86,15 +76,9 @@ api.interceptors.response.use(
   }
 );
 
-/** Fetch the audio blob for a given id from the Node.js server. */
-export async function fetchAudioBlob(audioId) {
-  const r = await api.get(`/audio/${audioId}`, { responseType: "blob" });
-  return URL.createObjectURL(r.data);
-}
-
 /** Health/reachability check for the configured server. */
 export async function pingServer(customUrl) {
-  const base = (customUrl || getServerUrl() || "").replace(/\/+$/, "");
+  const base = (customUrl || "").trim().replace(/\/+$/, "");
   if (!base) return { online: false, error: "no server url" };
   try {
     const r = await axios.get(`${base}/api/health`, { timeout: 6000 });

@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Home, ShoppingBasket, Shield, Key, ChevronRight, Loader2 } from "lucide-react";
+import { Home, ShoppingBasket, Shield, Key, ChevronRight, Loader2, Settings } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { getFallbackUrl } from "../lib/api";
 
 export default function Portal() {
   const { validateGateway } = useAuth();
@@ -108,21 +109,35 @@ export default function Portal() {
                     required
                   />
 
-                  <div className="flex gap-3">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedMode(null); setPassword(""); }}
+                        className="flex-1 py-4 rounded-2xl border border-white/10 text-sm font-semibold hover:bg-white/5 transition-colors"
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={loading}
+                        className="flex-[2] flex items-center justify-center gap-2 py-4 rounded-2xl bg-[#E05D26] text-white font-heading font-semibold shadow-[0_0_30px_rgba(224,93,38,0.35)]"
+                      >
+                        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify"}
+                      </button>
+                    </div>
+
                     <button
                       type="button"
-                      onClick={() => { setSelectedMode(null); setPassword(""); }}
-                      className="flex-1 py-4 rounded-2xl border border-white/10 text-sm font-semibold hover:bg-white/5 transition-colors"
+                      onClick={() => nav("/admin/settings")}
+                      className="w-full py-3 flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest text-white/20 hover:text-white/40 transition-colors"
                     >
-                      Back
+                      <Settings className="w-3 h-3" /> Configure Connection
                     </button>
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="flex-[2] flex items-center justify-center gap-2 py-4 rounded-2xl bg-[#E05D26] text-white font-heading font-semibold shadow-[0_0_30px_rgba(224,93,38,0.35)]"
-                    >
-                      {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify"}
-                    </button>
+
+                    <div className="text-[9px] text-white/10 font-mono">
+                       Authenticating via: {getFallbackUrl()}
+                    </div>
                   </div>
                 </form>
               </motion.div>

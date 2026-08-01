@@ -37,12 +37,12 @@ app.use(express.json());
 
 const PORT = 3000;
 
-// Persistence Paths
-const STATE_FILE = path.join(__dirname, "device_state.json");
-const SHOPPING_FILE = path.join(__dirname, "shopping_list.json");
-const PASSWORDS_FILE = path.join(__dirname, "passwords.json");
-const SUGGESTIONS_FILE = path.join(__dirname, "suggestions.json");
-const HUB_CONFIG_FILE = path.join(__dirname, "hub_config.json");
+// Persistence Paths (Absolute for Docker stability)
+const STATE_FILE = path.join(process.cwd(), "device_state.json");
+const SHOPPING_FILE = path.join(process.cwd(), "shopping_list.json");
+const PASSWORDS_FILE = path.join(process.cwd(), "passwords.json");
+const SUGGESTIONS_FILE = path.join(process.cwd(), "suggestions.json");
+const HUB_CONFIG_FILE = path.join(process.cwd(), "hub_config.json");
 
 // Gateway State
 interface Passwords {
@@ -277,11 +277,16 @@ app.post("/api/auth/verify", (req, res) => {
   const { mode, password } = req.body;
   if (!mode || !password) return res.status(400).json({ error: "Mode and password required" });
 
+  console.log(`\x1b[34m[Auth]\x1b[0m Verification attempt for mode: ${mode}`);
+
   const validPassword = (passwords as any)[mode];
   if (password === validPassword) {
     const token = jwt.sign({ mode }, JWT_SECRET, { expiresIn: "30d" });
+    console.log(`\x1b[32m[Auth]\x1b[0m Access granted for ${mode}`);
     return res.json({ success: true, token });
   }
+
+  console.warn(`\x1b[31m[Auth]\x1b[0m Invalid password for ${mode}`);
   res.status(401).json({ error: "Invalid password" });
 });
 
