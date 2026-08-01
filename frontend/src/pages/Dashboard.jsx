@@ -1,13 +1,17 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { RefreshCw, Wifi, WifiOff, ChevronDown } from "lucide-react";
+import { RefreshCw, Wifi, WifiOff, ChevronDown, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { friendlyErr } from "../lib/utils";
+import { useAuth } from "../lib/auth";
 import { useLiveSync } from "../lib/useLiveSync";
 import DeviceCard from "../components/DeviceCard";
+import { useNavigate } from "react-router-dom";
 
 export default function Dashboard() {
+  const { logout } = useAuth();
+  const nav = useNavigate();
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState({});
@@ -130,8 +134,14 @@ export default function Dashboard() {
             {online ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
             {online === null ? "…" : online ? "Online" : "Offline"}
           </div>
-          <button data-testid="refresh-btn" onClick={() => load()} className="w-9 h-9 rounded-full glass grid place-items-center">
+          <button data-testid="refresh-btn" onClick={() => load()} className="w-9 h-9 rounded-full glass grid place-items-center text-white/60 hover:text-white">
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          </button>
+          <button
+            onClick={() => { logout(); nav("/"); }}
+            className="w-9 h-9 rounded-full glass grid place-items-center text-red-400/80 hover:bg-red-400/10 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
           </button>
         </div>
       </motion.div>

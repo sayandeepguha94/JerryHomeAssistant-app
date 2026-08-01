@@ -104,7 +104,7 @@ let suggestions: string[] = [
   "Egg / ডিম", "Capcicum / ক্যাপসিকাম", "Beans / বিনস", "Carrot / গাজর", "Rice / চাল",
   "Protine Atta / প্রোটিন আটা"
 ];
-let passwords: Passwords = { home: "home0466", list: "list0466", admin: "admin0466" };
+let passwords: Passwords = { home: "home0466", list: "list0466", admin: "" };
 let IOT_HUB_URL = "http://192.168.29.112:8000/";
 
 // ---------- Helpers ----------
@@ -184,18 +184,32 @@ app.post("/api/auth/verify", (req, res) => {
 
   console.log(`[Auth] Verification request: Mode=${mode}, Password=[HIDDEN]`);
 
-  // ABSOLUTE ADMIN BYPASS: admin0466 always works for admin mode
-  if (mode === "admin" && password === "admin0466") {
-    const token = jwt.sign({ mode }, JWT_SECRET, { expiresIn: "30d" });
-    console.log(`[Auth] Master Bypass success for Admin Gateway`);
-    return res.json({ success: true, token });
-  }
-
-  const validPassword = (passwords as any)[mode];
-  if (password === validPassword) {
-    const token = jwt.sign({ mode }, JWT_SECRET, { expiresIn: "30d" });
-    console.log(`[Auth] Standard success for ${mode}`);
-    return res.json({ success: true, token });
+  // ADMIN LOGIC:
+  if (mode === "admin") {
+    const customAdminPass = passwords.admin;
+    // If no custom password is set, use hardcoded bypass
+    if (!customAdminPass) {
+      if (password === "admin0466") {
+        const token = jwt.sign({ mode }, JWT_SECRET, { expiresIn: "30d" });
+        console.log(`[Auth] Admin Bypass success`);
+        return res.json({ success: true, token });
+      }
+    } else {
+      // If custom password IS set, only allow that (admin0466 will fail here)
+      if (password === customAdminPass) {
+        const token = jwt.sign({ mode }, JWT_SECRET, { expiresIn: "30d" });
+        console.log(`[Auth] Admin Custom success`);
+        return res.json({ success: true, token });
+      }
+    }
+  } else {
+    // HOME & LIST LOGIC:
+    const validPassword = (passwords as any)[mode];
+    if (password === validPassword) {
+      const token = jwt.sign({ mode }, JWT_SECRET, { expiresIn: "30d" });
+      console.log(`[Auth] Standard success for ${mode}`);
+      return res.json({ success: true, token });
+    }
   }
 
   console.warn(`[Auth] Failed verification for ${mode}`);

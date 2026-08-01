@@ -1,12 +1,16 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Check, ShoppingBasket, ListChecks, Settings2, Trash2 } from "lucide-react";
+import { Plus, Check, ShoppingBasket, ListChecks, Settings2, Trash2, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { friendlyErr } from "../lib/utils";
+import { useAuth } from "../lib/auth";
 import { useLiveSync } from "../lib/useLiveSync";
+import { useNavigate } from "react-router-dom";
 
 export default function Shopping() {
+  const { logout } = useAuth();
+  const nav = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState("progress"); // "progress" | "manage"
@@ -78,9 +82,21 @@ export default function Shopping() {
 
   return (
     <div className="min-h-screen pb-32 px-5 pt-10 max-w-2xl mx-auto">
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-        <p className="text-xs uppercase tracking-[0.3em] text-white/40">Shopping List</p>
-        <h1 className="font-heading text-4xl font-bold">Household <span className="text-[#B4F733]">runs.</span></h1>
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-6 flex items-start justify-between"
+      >
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-white/40">Shopping List</p>
+          <h1 className="font-heading text-4xl font-bold">Household <span className="text-[#B4F733]">runs.</span></h1>
+        </div>
+        <button
+          onClick={() => { logout(); nav("/"); }}
+          className="w-10 h-10 rounded-full glass grid place-items-center text-red-400/80 hover:bg-red-400/10 transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
+        </button>
       </motion.div>
 
       {/* Mode Switcher */}
