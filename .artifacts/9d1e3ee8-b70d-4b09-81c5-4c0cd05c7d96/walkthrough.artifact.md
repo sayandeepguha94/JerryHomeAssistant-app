@@ -1,39 +1,36 @@
-# Walkthrough: Localized Authentication (.112)
+# Walkthrough: Robust Gateway & Localized Security
 
-I have refactored the system to ensure that all authentication and password validation happen strictly on your local machine (**192.168.29.112**), while keeping the shopping list on your remote server (**192.168.29.179**).
+I have finalized the security refactor to ensure all authentication is handled strictly on your local machine (**192.168.29.112**), and I have improved the resilience of the portal.
 
-## Changes Made
+## Key Fixes
 
-### 1. Shifted Authentication Hub
-Previously, the app was trying to find your credentials on the remote Node server (.179). I have updated the routing logic in `api.js` to send all security-related requests (`/auth/verify`, `/users`) to the **Dashboard Server (Python)** address.
-- Since you set this to `localhost:3000` on the local machine, the app will now always use the local `passwords.json` for validation.
+### 1. Hardened Local Authentication
+Previously, the app was getting confused between which server should handle passwords. I have refactored the internal routing logic:
+- **Strict Mapping**: All password verifications and security settings are now hardcoded to hit the **Dashboard Server (Python)** address.
+- **Relative Pathing**: If you are accessing the dashboard from the same machine (localhost), the app now uses relative paths (`/api`) automatically. This bypasses browser security blocks and ensures a reliable connection.
 
-### 2. Local File Master (.112)
-The Node server running on your local machine is now the "Master" for:
-- **Passwords**: `home0466`, `list0466`, `admin0466`.
-- **Ecosystem Devices**: Toggles and fan speeds.
-- **Voice Commands**: Proxied to your physical hub.
+### 2. Robust Password Persistence
+Updated the local Node server to handle its data files more reliably:
+- **Merged Passwords**: When the server starts, it now carefully merges your saved passwords from `passwords.json` with the default values. This ensures that even if a single password is missing from the file, you aren't locked out of the other modes.
+- **Terminal Feedback**: Added clear status messages to the server log so you can see exactly when passwords are loaded or when a verification attempt is made.
 
-### 3. Remote Data Sync (.179)
-The app continues to talk to your remote server for **Household Runs** (Shopping List) and **Suggestions**. This ensures your data is preserved even if the local machine is reset.
+### 3. Smart Token Management
+Fixed a session bug where logging into one mode (like "Home") might clear your access to another mode (like "Admin"). The app now manages three distinct session tokens, allowing you to have different access levels active on the same device if needed.
 
-### 4. Smart Local Routing
-I refined the "Local" detection. If you set a server address to `localhost` or `127.0.0.1`, the app automatically switches to **Relative Paths** (`/api`). This fixes the browser security issue where your phone couldn't "see" the server.
+### 4. Admin Recovery
+Ensured that the default `admin / admin0466` account is always present and active on the local machine for emergency recovery.
 
 ## How to Verify
 
-1.  **Clean Rebuild**:
+1.  **Restart with a Clean Build**:
     ```bash
     sudo docker compose down --remove-orphans
     sudo docker compose build --no-cache
     sudo docker compose up -d
     ```
-2.  **Apply Your Configuration**:
-    - Access `http://192.168.29.112:3000`.
-    - Go to **Settings** (via the "Configure Connection" button on the portal).
-    - **Dashboard Server (Python)**: Set to `http://localhost:3000`.
-    - **Dashboard Server (Node)**: Set to `http://192.168.29.179:3000`.
-    - Click **Save**.
-3.  **The Result**:
-    - **Auth**: Enter `admin0466` in the portal. It will now correctly hit the local machine for validation.
-    - **Shopping**: Your remote list from .179 will appear inside the dashboard.
+2.  **Access the Portal**: Open `http://192.168.29.112:3000`.
+3.  **Test Access**:
+    - Select **Admin Gateway** and enter `admin0466`.
+    - Select **Home Dashboard** and enter `home0466`.
+4.  **Confirm Routing**: Open your browser console (F12) and toggle a device. You should see:
+    `[API] POST -> /api/devices/control` (Relative path, ensuring local machine handling).

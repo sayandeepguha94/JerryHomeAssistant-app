@@ -1,7 +1,8 @@
-# Tasks: Localized Authentication
+# Tasks: Gateway Portal & Localized Security
 
-- [x] Refactor `api.js` to route Auth/Users to Python Server (.112)
-- [x] Keep Shopping/Suggestions routed to Node Server (.179)
-- [x] Verify `server.ts` handles local file persistence for passwords
-- [x] Fix localhost routing for browser compatibility
-- [x] Finalize production build
+- [/] Implement Gateway password persistence and API in `server.ts`
+- [ ] Restore dynamic auth logic in `auth.jsx`
+- [ ] Configure `api.js` for dual-target routing (Auth to .112, List to .179)
+- [ ] Restore `Portal.jsx` and protected routes in `App.js`
+- [ ] Add password management to `Settings.jsx`
+- [ ] Verify production build

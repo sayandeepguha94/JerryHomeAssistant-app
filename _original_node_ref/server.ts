@@ -164,7 +164,11 @@ function loadAllState() {
       if (Array.isArray(data)) shoppingList = data;
     }
     if (fs.existsSync(PASSWORDS_FILE)) {
-      passwords = JSON.parse(fs.readFileSync(PASSWORDS_FILE, "utf8"));
+      const loadedPasswords = JSON.parse(fs.readFileSync(PASSWORDS_FILE, "utf8"));
+      passwords = { ...passwords, ...loadedPasswords };
+      console.log("[State] Loaded custom gateway passwords from disk.");
+    } else {
+      console.log("[State] Using default gateway passwords.");
     }
     if (fs.existsSync(SUGGESTIONS_FILE)) {
       const data = JSON.parse(fs.readFileSync(SUGGESTIONS_FILE, "utf8"));

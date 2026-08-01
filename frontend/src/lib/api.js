@@ -40,17 +40,21 @@ api.interceptors.request.use((config) => {
   const nodeUrl = getStoredNodeUrl();
 
   // ROUTING LOGIC:
-  // - Machine .179: Only handles the shopping list data.
-  // - Machine .112: Handles everything else (Auth, Passwords, Devices).
+  // - Machine .179 (Node Server): Handles shopping list.
+  // - Machine .112 (Python Server/Bridge): Handles Auth, Passwords, Devices.
   const isShopping = config.url.includes("/shopping-list") ||
                      config.url.includes("/shopping-suggestions");
 
   const targetBase = isShopping ? (nodeUrl || getBaseUrl()) : (pythonUrl || getBaseUrl());
 
-  // Determine if target is effectively 'localhost' for relative pathing
+  // Determine if target is effectively the same as current dashboard host
   const targetHost = targetBase.replace(/^https?:\/\//, "").replace(/\/$/, "");
   const currentHost = typeof window !== "undefined" ? window.location.host : "";
-  const isLocal = targetHost === currentHost || targetHost.includes("localhost") || targetHost.includes("127.0.0.1");
+
+  // If target matches current host OR target is 'localhost', use relative paths
+  const isLocal = targetHost === currentHost ||
+                  targetHost.includes("localhost") ||
+                  targetHost.includes("127.0.0.1");
 
   const cleanPath = config.url.replace(/^\/api/, "").replace(/^\//, "");
 
@@ -62,7 +66,10 @@ api.interceptors.request.use((config) => {
 
   console.log(`[API] ${config.method?.toUpperCase()} -> ${config.url}`);
 
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = localStorage.getItem("jerry_admin_token") ||
+                localStorage.getItem("jerry_home_token") ||
+                localStorage.getItem("jerry_list_token");
+
   if (token) config.headers.Authorization = `Bearer ${token}`;
 
   return config;
@@ -80,7 +87,9 @@ export async function pingServer(customUrl) {
   const base = (customUrl || "").trim().replace(/\/+$/, "");
   if (!base) return { online: false, error: "no server url" };
   try {
-    const r = await axios.get(`${base}/api/health`, { timeout: 6000 });
+    // Force relative check if localhost
+    const target = (base.includes("localhost") || base.includes("127.0.0.1")) ? "" : base;
+    const r = await axios.get(`${target}/api/health`, { timeout: 6000 });
     return { online: r.status === 200, status: r.status };
   } catch (e) {
     return { online: false, error: e.message };
