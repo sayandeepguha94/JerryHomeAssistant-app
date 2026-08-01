@@ -1,9 +1,7 @@
-# Tasks: Direct Admin Access & Build Fixes
+# Tasks: URL-Based Access Control
 
-- [x] Hardcode Admin user in `auth.jsx`
-- [x] Remove Login & Users routes in `App.js`
-- [x] Remove Users icon from `BottomNav.jsx`
-- [x] Remove Profile & Logout from `Settings.jsx`
-- [x] Clean up User persistence in `server.ts`
-- [x] Fix `Settings.jsx` build errors (Removed undefined `logout` calls)
-- [x] Verify production build
+- [x] Define new route structure in `App.js` (/home, /list, /admin)
+- [x] Restrict `BottomNav.jsx` to only appear on `/admin` routes
+- [x] Add "Access URLs" panel to `Settings.jsx`
+- [x] Verify redirection from `/` to `/home`
+- [x] Finalize production build

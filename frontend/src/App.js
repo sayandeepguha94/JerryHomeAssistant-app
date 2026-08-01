@@ -1,35 +1,34 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
-import { AuthProvider, useAuth } from "./lib/auth";
+import { AuthProvider } from "./lib/auth";
 import ServerSetup from "./pages/ServerSetup";
 import Dashboard from "./pages/Dashboard";
 import Shopping from "./pages/Shopping";
 import Settings from "./pages/Settings";
 import BottomNav from "./components/BottomNav";
 
-function Protected({ children }) {
-  const { user, loading } = useAuth();
-  if (loading) return <FullScreen>Loading…</FullScreen>;
-  // User is now always present via AuthProvider hardcoding
-  return children;
-}
-
-function FullScreen({ children }) {
-  return (
-    <div className="fixed inset-0 grid place-items-center text-white/60 font-body bg-[#0B0C10]">{children}</div>
-  );
-}
-
 function AppShell() {
   return (
     <>
       <Routes>
-        <Route path="/server-setup" element={<Protected><ServerSetup /></Protected>} />
-        <Route path="/" element={<Protected><Dashboard /></Protected>} />
-        <Route path="/shopping" element={<Protected><Shopping /></Protected>} />
-        <Route path="/settings" element={<Protected><Settings /></Protected>} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {/* Isolated Home Access */}
+        <Route path="/home" element={<Dashboard />} />
+
+        {/* Isolated List Access */}
+        <Route path="/list" element={<Shopping />} />
+
+        {/* Admin Gateway (Full Access) */}
+        <Route path="/admin">
+          <Route index element={<Dashboard />} />
+          <Route path="shopping" element={<Shopping />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="server-setup" element={<ServerSetup />} />
+        </Route>
+
+        {/* Default Redirects */}
+        <Route path="/" element={<Navigate to="/home" replace />} />
+        <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
       <BottomNav />
     </>

@@ -1,51 +1,61 @@
-# Implementation Plan: Direct Admin Access (No Accounts)
+# Implementation Plan: URL-Based Access Control
 
-This plan removes the multi-user account system and configures the application to open directly into the Admin dashboard.
+Restructure the application into three primary access URLs: `/home`, `/list`, and `/admin`, with varying visibility of features and navigation.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> **No More Security**: This change removes the login screen. Anyone who has the IP address of your server will have immediate access to control your home devices.
+> **Access URLs**:
+> - `/home`: Grants access strictly to the home devices dashboard.
+> - `/list`: Grants access strictly to the household shopping list.
+> - `/admin`: Master access to all features (Home, List, Setup).
 >
-> **Feature Removal**: The "Users" management page and all "Logout" functionality will be completely deleted from the UI.
+> **Navigation**:
+> - In `/home` and `/list` modes, the bottom navigation will only show the single relevant icon.
+> - In `/admin` mode, the full navigation bar will be visible.
 
 ## Proposed Changes
 
 ### Frontend Core (`src/lib/auth.jsx`)
 
 #### [MODIFY] [auth.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/lib/auth.jsx)
-- Hardcode the `admin` user as the default initial state.
-- Disable the `login` and `logout` functions as they are no longer needed.
+- No major changes needed since we are operating in "no user" mode with a hardcoded admin.
 
 ### Frontend Routing (`src/App.js`)
 
 #### [MODIFY] [App.js](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/App.js)
-- Delete the `/login` and `/users` routes.
-- Simplify the `Protected` component to act as a pass-through, since a user is always present.
+- Update routes to handle the new URL structure:
+  - `/home` -> Dashboard
+  - `/list` -> Shopping
+  - `/admin` -> Dashboard (Admin mode)
+  - `/admin/shopping` -> Shopping (Admin mode)
+  - `/admin/settings` -> Settings (Admin mode)
+  - `/admin/server-setup` -> ServerSetup (Admin mode)
+- Add a default redirect from `/` to `/home`.
 
-### Frontend UI (`src/components/` & `src/pages/`)
+### Frontend Components
 
 #### [MODIFY] [BottomNav.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/components/BottomNav.jsx)
-- Remove the "Users" navigation item.
+- Update to detect the current mode from the URL.
+- Filter visible navigation items based on the mode:
+  - `home` mode -> Show only Dashboard icon (or hide nav if preferred).
+  - `list` mode -> Show only Shopping icon.
+  - `admin` mode -> Show all icons.
 
 #### [MODIFY] [Settings.jsx](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/frontend/src/pages/Settings.jsx)
-- Remove the Profile Card (Name, Role) and the "Logout" button.
-
-### Backend (`_original_node_ref/server.ts`)
-
-#### [MODIFY] [server.ts](file:///Users/sayandeepguha/AndroidStudioProjects/JerryHomeAssistant-app/_original_node_ref/server.ts)
-- Remove user persistence logic (`users.json`).
-- Keep the `devices` and `shopping` features as-is.
+- Add a "Quick Links" section that only appears when in `admin` mode.
+- List the other access URLs (`/home`, `/list`, `/admin`) for easy copy-pasting.
 
 ## Verification Plan
 
 ### Manual Verification
-1.  **Deploy**: `sudo docker compose up -d --build`.
-2.  **Initial Access**: Open `http://192.168.29.112:3000`.
-    - **Expected**: The Dashboard should open immediately without asking for a password.
-3.  **Navigation Check**:
-    - Verify that only "Home", "List", and "Setup" appear in the bottom bar.
-    - Verify that the "Users" page is gone.
-4.  **Settings Check**:
-    - Go to Settings.
-    - Verify the top profile section is gone and there is no way to log out.
+1.  **Visit `/home`**:
+    - Verify Dashboard is visible.
+    - Verify Bottom Nav shows only the "Home" icon (or no nav).
+2.  **Visit `/list`**:
+    - Verify Shopping List is visible.
+    - Verify Bottom Nav shows only the "List" icon.
+3.  **Visit `/admin`**:
+    - Verify Dashboard is visible.
+    - Verify full Bottom Nav is visible.
+    - Navigate to Settings and verify "Quick Links" are shown.

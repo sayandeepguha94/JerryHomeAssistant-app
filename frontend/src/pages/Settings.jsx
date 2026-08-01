@@ -5,7 +5,28 @@ import { LogOut, Save, Server, User as UserIcon, Wifi, WifiOff } from "lucide-re
 import { toast } from "sonner";
 import { getServerUrl, setServerUrl, clearServerUrl, pingServer, getFallbackUrl, setFallbackUrl, api } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
+
+function UrlRow({ label, url }) {
+  const fullUrl = window.location.origin + url;
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-[10px] uppercase tracking-widest text-white/30">{label}</p>
+      <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-white/5 border border-white/5">
+        <code className="text-xs text-[#B4F733] font-mono break-all">{fullUrl}</code>
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(fullUrl);
+            toast.success(`${label} URL copied`);
+          }}
+          className="text-[10px] text-white/40 hover:text-white uppercase font-bold"
+        >
+          Copy
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function Settings() {
   const { user } = useAuth();
@@ -15,7 +36,8 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [pythonStatus, setPythonStatus] = useState(null);
   const [nodeStatus, setNodeStatus] = useState(null);
-  const isAdmin = true; // Always admin in this mode
+  const { pathname } = useLocation();
+  const isAdminPath = pathname.startsWith("/admin");
 
   useEffect(() => {
     (async () => {
@@ -74,6 +96,23 @@ export default function Settings() {
         <h1 className="font-heading text-4xl font-bold">Configure.</h1>
       </motion.div>
 
+      {isAdminPath && (
+        <div className="glass rounded-3xl p-5 mb-5" data-testid="settings-access-card">
+          <div className="flex items-center gap-2 mb-3">
+            <Server className="w-4 h-4 text-[#E05D26]" />
+            <h3 className="font-heading text-lg font-semibold text-[#E05D26]">Access URLs</h3>
+          </div>
+          <p className="text-xs text-white/50 mb-4">
+            Share these URLs to provide specific access to your system.
+          </p>
+          <div className="space-y-4">
+            <UrlRow label="Public Home" url="/home" />
+            <UrlRow label="Public List" url="/list" />
+            <UrlRow label="Admin Gateway" url="/admin" />
+          </div>
+        </div>
+      )}
+
       <div className="glass rounded-3xl p-5 mb-5" data-testid="settings-server-card">
         <div className="flex items-center gap-2 mb-3">
           <Server className="w-4 h-4 text-[#B4F733]" />
@@ -92,7 +131,7 @@ export default function Settings() {
           value={pythonUrl}
           onChange={(e) => setPythonUrl(e.target.value)}
           placeholder="http://localhost:3000"
-          disabled={!isAdmin}
+          disabled={!isAdminPath}
           className="w-full bg-transparent border-b border-white/20 focus:border-[#B4F733] outline-none py-2 text-base font-heading mb-8"
         />
 
@@ -113,11 +152,11 @@ export default function Settings() {
           value={nodeUrl}
           onChange={(e) => setNodeUrl(e.target.value)}
           placeholder="http://192.168.29.179:3000"
-          disabled={!isAdmin}
+          disabled={!isAdminPath}
           className="w-full bg-transparent border-b border-white/20 focus:border-[#E05D26] outline-none py-2 text-base font-heading mb-6"
         />
 
-        {isAdmin && (
+        {isAdminPath && (
           <div className="mt-4 flex gap-2 flex-wrap">
             <button
               onClick={save}
